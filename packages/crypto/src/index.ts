@@ -1,2 +1,7 @@
-// M1: key derivation (done), key wrapping, AES-256-GCM, recovery key, export format.
+export * from './errors'
+export * from './bytes'
 export * from './kdf'
+export * from './aead'
+export * from './vault'
+export * from './recovery'
+export * from './exportfile'

@@ -1,4 +1,5 @@
 import { argon2id } from 'hash-wasm'
+import { CryptoError } from './errors'
 
 /**
  * Key derivation: master password -> Argon2id -> HKDF -> two independent 32-byte keys.
@@ -21,11 +22,15 @@ export interface KdfParams {
 
 export const KDF_SALT_BYTES = 16
 
-/** Provisional until the on-device benchmark picks final values. */
+/**
+ * Chosen from an on-device benchmark of a cheap 3-4 year old Android phone (Chrome):
+ * 96 MiB t=3 took 525 ms and 128 MiB t=3 took 702 ms, so 108 MiB t=3 is roughly 0.6 s there.
+ * Params are stored per user, so they can be raised later (upgrade on unlock).
+ */
 export const DEFAULT_KDF_PARAMS: KdfParams = {
   alg: 'argon2id',
   version: 19,
-  memoryKiB: 65536,
+  memoryKiB: 110592, // 108 MiB
   iterations: 3,
   parallelism: 1,
 }
@@ -62,7 +67,7 @@ export function validateKdfParams(p: KdfParams): void {
     p.iterations <= KDF_BOUNDS.maxIterations &&
     p.parallelism >= KDF_BOUNDS.minParallelism &&
     p.parallelism <= KDF_BOUNDS.maxParallelism
-  if (!ok) throw new Error('Invalid KDF parameters')
+  if (!ok) throw new CryptoError('INVALID_PARAMS', 'Invalid KDF parameters')
 }
 
 /**
@@ -74,7 +79,8 @@ export function encodePassword(password: string): Uint8Array {
   return new TextEncoder().encode(password.normalize('NFKC'))
 }
 
-async function hkdf(ikm: Uint8Array, info: string): Promise<Uint8Array> {
+/** HKDF-SHA256 with an empty salt and a purpose label, producing 32 bytes. */
+export async function hkdfSha256(ikm: Uint8Array, info: string): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey('raw', ikm as BufferSource, 'HKDF', false, [
     'deriveBits',
   ])
@@ -97,8 +103,8 @@ export async function deriveKeys(
   params: KdfParams,
 ): Promise<DerivedKeys> {
   validateKdfParams(params)
-  if (salt.length !== KDF_SALT_BYTES) throw new Error('Invalid salt length')
-  if (password.length === 0) throw new Error('Empty password')
+  if (salt.length !== KDF_SALT_BYTES) throw new CryptoError('INVALID_PARAMS', 'Invalid salt length')
+  if (password.length === 0) throw new CryptoError('INVALID_PARAMS', 'Empty password')
 
   const ikm = await argon2id({
     password: encodePassword(password),
@@ -111,7 +117,10 @@ export async function deriveKeys(
   })
 
   try {
-    const [authKey, wrapKey] = await Promise.all([hkdf(ikm, AUTH_INFO), hkdf(ikm, WRAP_INFO)])
+    const [authKey, wrapKey] = await Promise.all([
+      hkdfSha256(ikm, AUTH_INFO),
+      hkdfSha256(ikm, WRAP_INFO),
+    ])
     return { authKey, wrapKey }
   } finally {
     ikm.fill(0)
