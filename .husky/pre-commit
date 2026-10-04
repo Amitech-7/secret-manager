@@ -1,0 +1,7 @@
+# Block commits containing secrets. The repo is public, so history can never be cleaned.
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "gitleaks is not installed. Install it first:  winget install gitleaks.gitleaks"
+  exit 1
+fi
+gitleaks git --pre-commit --staged --redact --no-banner || exit 1
+pnpm exec prettier --check . || exit 1

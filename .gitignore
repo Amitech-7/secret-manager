@@ -1,0 +1,10 @@
+node_modules
+dist
+.vercel
+coverage
+*.log
+.DS_Store
+# Never commit real secrets. Only *.example files are allowed.
+.env
+.env.*
+!.env.example
