@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>KDF benchmark</title>
+    <style>
+      body {
+        font:
+          15px/1.4 system-ui,
+          sans-serif;
+        margin: 0;
+        padding: 16px;
+        max-width: 640px;
+      }
+      button {
+        font: inherit;
+        padding: 10px 16px;
+        margin: 4px 8px 4px 0;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 12px;
+      }
+      th,
+      td {
+        border-bottom: 1px solid #8884;
+        padding: 6px 4px;
+        text-align: left;
+        font-size: 13px;
+      }
+      .ok {
+        color: #16a34a;
+      }
+      .slow {
+        color: #d97706;
+      }
+      .bad {
+        color: #dc2626;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 12px;
+        background: #8881;
+        padding: 8px;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0b1220;
+          color: #e5e7eb;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/bench/main.ts"></script>
+  </body>
+</html>
