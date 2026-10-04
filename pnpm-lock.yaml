@@ -261,6 +261,9 @@ importers:
 
   packages/crypto:
     dependencies:
+      '@sm/shared':
+        specifier: workspace:*
+        version: link:../shared
       hash-wasm:
         specifier: 4.12.0
         version: 4.12.0

@@ -60,8 +60,11 @@ describe('deriveKeys', () => {
 })
 
 describe('validateKdfParams', () => {
-  it('accepts the defaults', () => {
+  it('accepts the defaults, which are the values chosen from the phone benchmark', () => {
     expect(() => validateKdfParams(DEFAULT_KDF_PARAMS)).not.toThrow()
+    expect(DEFAULT_KDF_PARAMS.memoryKiB).toBe(108 * 1024)
+    expect(DEFAULT_KDF_PARAMS.iterations).toBe(3)
+    expect(DEFAULT_KDF_PARAMS.parallelism).toBe(1)
   })
 
   it('rejects downgraded or oversized parameters', () => {
