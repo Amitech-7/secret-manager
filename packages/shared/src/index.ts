@@ -30,3 +30,16 @@ export type ErrorCode = (typeof ERROR_CODES)[number]
 export interface ApiError {
   error: { code: ErrorCode; message: string; retryAfter?: number }
 }
+
+/** Kinds of encrypted vault item. Adding a kind needs a database migration (CHECK constraint). */
+export const ITEM_TYPES = [
+  'credential',
+  'card',
+  'note',
+  'member',
+  'bank',
+  'account_type',
+  'account',
+] as const
+
+export type ItemType = (typeof ITEM_TYPES)[number]

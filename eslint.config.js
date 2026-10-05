@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig } from 'eslint/config'
 
 export default defineConfig(
-  { ignores: ['**/dist/**', '**/node_modules/**', '.vercel/**', 'api/**'] },
+  { ignores: ['**/dist/**', '**/node_modules/**', '.vercel/**', 'api/**', '.kilo/**'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   {
