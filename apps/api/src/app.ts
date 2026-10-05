@@ -1,23 +1,60 @@
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
+import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
-import type { ApiError } from '@sm/shared'
+import type { AppEnv, Deps } from './deps'
+import { errorBody, handleError } from './errors'
+import { rateLimit } from './rateLimit'
+import { cron } from './routes/cron'
 
-export const app = new Hono().basePath('/api/v1')
+export const MAX_BODY_BYTES = 2 * 1024 * 1024
 
-app.use('*', secureHeaders())
+/** Middleware, error handling and the 404 shape. Feature routers are mounted on top of this. */
+export function buildBase(deps: Deps) {
+  const app = new Hono<AppEnv>().basePath('/api/v1')
 
-app.get('/health', (c) => c.json({ status: 'ok' as const }))
+  app.use('*', async (c, next) => {
+    c.set('deps', deps)
+    await next()
+  })
+  app.use('*', secureHeaders())
+  app.use(
+    '*',
+    cors({
+      origin: (origin) => {
+        // Same-origin web needs no CORS. Only the Capacitor app and listed origins get headers.
+        try {
+          return deps.getEnv().ALLOWED_ORIGINS.includes(origin) ? origin : undefined
+        } catch {
+          return undefined
+        }
+      },
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE'],
+      allowHeaders: ['Authorization', 'Content-Type'],
+      maxAge: 600,
+    }),
+  )
+  app.use(
+    '*',
+    bodyLimit({
+      maxSize: MAX_BODY_BYTES,
+      onError: (c) => c.json(errorBody('VALIDATION', 'Request body too large'), 413),
+    }),
+  )
 
-app.notFound((c) => {
-  const body: ApiError = { error: { code: 'NOT_FOUND', message: 'Not found' } }
-  return c.json(body, 404)
-})
+  app.notFound((c) => c.json(errorBody('NOT_FOUND', 'Not found'), 404))
+  app.onError(handleError)
+  return app
+}
 
-// Never leak internals to the client.
-app.onError((err, c) => {
-  console.error('Unhandled error:', err.name)
-  const body: ApiError = { error: { code: 'INTERNAL', message: 'Internal error' } }
-  return c.json(body, 500)
-})
+export function createApp(deps: Deps) {
+  const app = buildBase(deps)
 
-export default app
+  // Needs no database and no environment, so it stays up when everything else is broken.
+  app.get('/health', (c) => c.json({ status: 'ok' as const }))
+
+  app.use('/cron/*', rateLimit({ group: 'cron', limit: 30, windowSec: 60 }))
+  app.route('/cron', cron)
+
+  return app
+}
