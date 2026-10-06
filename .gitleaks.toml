@@ -1,0 +1,8 @@
+# Extends gitleaks' built-in rules. Only the exceptions below are added.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Deliberately weak passwords used as inputs to the password-strength tests"
+targetRules = ["generic-api-key"]
+paths = ['''packages/client/src/strength\.test\.ts''']

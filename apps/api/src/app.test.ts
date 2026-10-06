@@ -21,6 +21,7 @@ describe('app shell', () => {
         throw new Error('db must not be touched')
       },
       now: () => new Date(),
+      verifyTurnstile: async () => false,
     })
     const res = await app.request('/api/v1/health')
     expect(res.status).toBe(200)
@@ -63,6 +64,7 @@ describe('error handling and validation', () => {
     getEnv: () => h.deps.getEnv(),
     getDb: () => h.db,
     now: () => new Date(),
+    verifyTurnstile: async () => false,
   })
   const schema = z.object({ name: z.string().min(1), age: z.number().int() })
   app.post('/echo', async (c) => c.json(await parseJson(c, schema)))

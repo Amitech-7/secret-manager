@@ -3,6 +3,7 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
+import { secureConnectionString } from '../src/connection'
 
 /**
  * Applies migrations to ONE database, deliberately and by hand. CI never runs this.
@@ -78,7 +79,7 @@ async function main() {
     process.exit(1)
   }
 
-  const pool = new pg.Pool({ connectionString: url, max: 1 })
+  const pool = new pg.Pool({ connectionString: secureConnectionString(url), max: 1 })
   try {
     await migrate(drizzle(pool), { migrationsFolder })
     console.log('\nMigrations applied.')

@@ -1,5 +1,9 @@
+import { DEFAULT_KDF_PARAMS, KDF_BOUNDS, type KdfParams } from '@sm/shared'
 import { argon2id } from 'hash-wasm'
 import { CryptoError } from './errors'
+
+export { DEFAULT_KDF_PARAMS, KDF_BOUNDS }
+export type { KdfParams }
 
 /**
  * Key derivation: master password -> Argon2id -> HKDF -> two independent 32-byte keys.
@@ -12,39 +16,7 @@ import { CryptoError } from './errors'
  * attacker nothing about wrapKey beyond what the Argon2id output itself would.
  */
 
-export interface KdfParams {
-  alg: 'argon2id'
-  version: 19
-  memoryKiB: number
-  iterations: number
-  parallelism: number
-}
-
 export const KDF_SALT_BYTES = 16
-
-/**
- * Chosen from an on-device benchmark of a cheap 3-4 year old Android phone (Chrome):
- * 96 MiB t=3 took 525 ms and 128 MiB t=3 took 702 ms, so 108 MiB t=3 is roughly 0.6 s there.
- * Params are stored per user, so they can be raised later (upgrade on unlock).
- */
-export const DEFAULT_KDF_PARAMS: KdfParams = {
-  alg: 'argon2id',
-  version: 19,
-  memoryKiB: 110592, // 108 MiB
-  iterations: 3,
-  parallelism: 1,
-}
-
-// Bounds are enforced on every derivation, including params read back from the server,
-// so a tampered response cannot downgrade the work factor or exhaust device memory.
-export const KDF_BOUNDS = {
-  minMemoryKiB: 19456, // 19 MiB, the lowest value commonly recommended for Argon2id
-  maxMemoryKiB: 262144, // 256 MiB
-  minIterations: 2,
-  maxIterations: 10,
-  minParallelism: 1,
-  maxParallelism: 4,
-} as const
 
 export interface DerivedKeys {
   authKey: Uint8Array

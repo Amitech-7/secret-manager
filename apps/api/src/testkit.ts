@@ -8,6 +8,8 @@ export const TEST_SOURCE = {
   CRON_SECRET: 'c'.repeat(40),
   RATE_LIMIT_SECRET: 'r'.repeat(40),
   ALLOWED_ORIGINS: 'https://localhost, capacitor://localhost',
+  JWT_SECRET: 'j'.repeat(40),
+  FAKE_SALT_SECRET: 'f'.repeat(40),
 }
 
 export const testEnv = (overrides: Record<string, string> = {}): Env =>
@@ -18,14 +20,28 @@ export interface Harness {
   db: Database
   client: TestDb['client']
   clock: { now: Date }
+  /** What the fake captcha answers. Flip to false to simulate a failed challenge. */
+  captcha: { passes: boolean }
 }
 
 /** Real Postgres (PGlite) with production migrations, plus a clock the test controls. */
 export async function harness(envOverrides: Record<string, string> = {}): Promise<Harness> {
   const { db, client } = await createTestDb()
-  const clock = { now: new Date('2026-10-05T12:00:00Z') }
+  const clock = { now: new Date() }
+  const captcha = { passes: true }
   const env = testEnv(envOverrides)
-  return { deps: { getEnv: () => env, getDb: () => db, now: () => clock.now }, db, client, clock }
+  return {
+    deps: {
+      getEnv: () => env,
+      getDb: () => db,
+      now: () => clock.now,
+      verifyTurnstile: async () => captcha.passes,
+    },
+    db,
+    client,
+    clock,
+    captcha,
+  }
 }
 
 const bytes = (n: number, fill: number) => new Uint8Array(n).fill(fill)

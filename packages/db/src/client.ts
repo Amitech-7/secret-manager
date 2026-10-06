@@ -2,6 +2,7 @@ import type { SQL } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core'
 import pg from 'pg'
+import { secureConnectionString } from './connection'
 import * as schema from './schema'
 
 /** Driver-neutral handle: node-postgres in production, PGlite in tests. */
@@ -9,7 +10,7 @@ export type Database = PgDatabase<PgQueryResultHKT, typeof schema>
 
 export function createPool(connectionString: string): pg.Pool {
   return new pg.Pool({
-    connectionString,
+    connectionString: secureConnectionString(connectionString),
     // Serverless functions: keep the pool tiny and let the Neon pooler do the multiplexing.
     max: 3,
     idleTimeoutMillis: 10_000,

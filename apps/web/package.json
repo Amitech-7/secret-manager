@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@sm/client": "workspace:*",
     "@sm/crypto": "workspace:*",
     "@sm/shared": "workspace:*",
     "react": "^19.3.0",

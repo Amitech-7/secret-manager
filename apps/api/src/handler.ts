@@ -3,6 +3,7 @@ import { createDb, createPool, type Database } from '@sm/db'
 import { createApp } from './app'
 import type { Deps } from './deps'
 import { parseEnv, type Env } from './env'
+import { createTurnstileVerifier } from './turnstile'
 
 let env: Env | undefined
 let db: Database | undefined
@@ -12,6 +13,7 @@ const deps: Deps = {
   getEnv: () => (env ??= parseEnv(process.env)),
   getDb: () => (db ??= createDb(createPool(deps.getEnv().DATABASE_URL))),
   now: () => new Date(),
+  verifyTurnstile: createTurnstileVerifier(() => deps.getEnv().TURNSTILE_SECRET),
 }
 
 export default createApp(deps)
