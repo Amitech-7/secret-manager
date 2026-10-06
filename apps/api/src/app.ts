@@ -5,7 +5,9 @@ import { secureHeaders } from 'hono/secure-headers'
 import type { AppEnv, Deps } from './deps'
 import { errorBody, handleError } from './errors'
 import { rateLimit } from './rateLimit'
+import { auth } from './routes/auth'
 import { cron } from './routes/cron'
+import { me } from './routes/me'
 
 export const MAX_BODY_BYTES = 2 * 1024 * 1024
 
@@ -55,6 +57,8 @@ export function createApp(deps: Deps) {
 
   app.use('/cron/*', rateLimit({ group: 'cron', limit: 30, windowSec: 60 }))
   app.route('/cron', cron)
+  app.route('/auth', auth)
+  app.route('/me', me)
 
   return app
 }

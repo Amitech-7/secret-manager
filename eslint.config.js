@@ -34,6 +34,23 @@ export default defineConfig(
     },
   },
   {
+    // Shared client logic: runs in browsers and the mobile app, so it must never touch the DB.
+    files: ['packages/client/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@sm/db', '@sm/db/*'],
+              message: 'Client code must not import the DB package.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // API: the server must never contain the code that could decrypt user data.
     files: ['apps/api/**/*.ts'],
     rules: {

@@ -47,15 +47,21 @@ Rules:
 
 Set in Vercel, Project Settings, Environment Variables. Mark secrets as Sensitive.
 
-| Variable                       | Production                            | Preview                                |
-| ------------------------------ | ------------------------------------- | -------------------------------------- |
-| `DATABASE_URL`                 | `production` branch, `sm_app`, pooled | `development` branch, `sm_app`, pooled |
-| `CRON_SECRET`                  | 32+ random characters                 | a different random value               |
-| `RATE_LIMIT_SECRET`            | 32+ random characters                 | a different random value               |
-| `ENABLE_EXPERIMENTAL_COREPACK` | `1`                                   | `1`                                    |
+| Variable                       | Production                                                   | Preview                                |
+| ------------------------------ | ------------------------------------------------------------ | -------------------------------------- |
+| `DATABASE_URL`                 | `production` branch, `sm_app`, pooled, `sslmode=verify-full` | `development` branch, `sm_app`, pooled |
+| `CRON_SECRET`                  | 32+ random characters                                        | a different random value               |
+| `RATE_LIMIT_SECRET`            | 32+ random characters                                        | a different random value               |
+| `JWT_SECRET`                   | 32+ random characters                                        | a different random value               |
+| `FAKE_SALT_SECRET`             | 32+ random characters                                        | a different random value               |
+| `TURNSTILE_SECRET`             | your real widget's secret key                                | Cloudflare's always-pass test secret   |
+| `VITE_TURNSTILE_SITE_KEY`      | your real widget's site key                                  | Cloudflare's always-pass test site key |
+| `ENABLE_EXPERIMENTAL_COREPACK` | `1`                                                          | `1`                                    |
 
-Later milestones add `JWT_SECRET`, `FAKE_SALT_SECRET`, `TOTP_ENC_KEY`, `TURNSTILE_SECRET` and
-`ALLOWED_ORIGINS` (see `.env.example`). Redeploy after changing variables.
+`VITE_*` values are public and compiled into the page at build time, so they must exist before
+the build runs. Server secrets must be **Sensitive** and different in each environment. Later
+milestones add `TOTP_ENC_KEY` and `ALLOWED_ORIGINS` (see `.env.example`). Redeploy after changing
+variables.
 
 Generate a random value in PowerShell (works in Windows PowerShell and PowerShell 7):
 

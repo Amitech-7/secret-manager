@@ -70,9 +70,14 @@ export async function generateRecoveryKey(): Promise<{ key: Uint8Array; display:
   return { key, display: formatRecoveryKey(key, await checksum(key)) }
 }
 
+/** Upper-cases, drops spaces and hyphens, and maps the look-alikes (O to 0, I and L to 1). */
+export function normalizeRecoveryInput(input: string): string {
+  return input.toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1')
+}
+
 /** Accepts upper or lower case, spaces and hyphens, and the usual look-alike characters. */
 export async function parseRecoveryKey(input: string): Promise<Uint8Array> {
-  const cleaned = input.toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1')
+  const cleaned = normalizeRecoveryInput(input)
   if (cleaned.length !== ENCODED_LENGTH) {
     throw new CryptoError('INVALID_RECOVERY_KEY', 'Recovery key has the wrong length')
   }

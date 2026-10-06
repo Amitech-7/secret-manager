@@ -7,7 +7,13 @@ describe('parseEnv', () => {
     const env = testEnv()
     expect(env.DB_SIZE_LIMIT_MB).toBe(512)
     expect(env.ALLOWED_ORIGINS).toEqual(['https://localhost', 'capacitor://localhost'])
-    expect(env.JWT_SECRET).toBeUndefined()
+    const minimal = parseEnv({
+      DATABASE_URL: TEST_SOURCE.DATABASE_URL,
+      CRON_SECRET: TEST_SOURCE.CRON_SECRET,
+      RATE_LIMIT_SECRET: TEST_SOURCE.RATE_LIMIT_SECRET,
+    })
+    expect(minimal.JWT_SECRET).toBeUndefined()
+    expect(minimal.FAKE_SALT_SECRET).toBeUndefined()
   })
 
   it('has no allowed origins when none are configured', () => {
