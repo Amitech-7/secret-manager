@@ -1,17 +1,41 @@
 import { createHmac } from 'node:crypto'
-import { and, eq, isNull, sessions, sql, users, vaultItems } from '@sm/db'
+import { and, eq, isNull, ne, sessions, sql, users, vaultItems } from '@sm/db'
 import { AUTH_LIMITS, DEFAULT_KDF_PARAMS } from '@sm/shared'
 import { Hono } from 'hono'
+import { requireAuth } from '../auth/middleware'
 import { createSession } from '../auth/session'
 import { requireSecret } from '../auth/secrets'
-import { loginSchema, refreshSchema, registerSchema, saltRequestSchema } from '../auth/schemas'
-import { b64u, newRefreshToken, safeEqual, sha256, signAccessToken } from '../auth/tokens'
-import type { AppEnv } from '../deps'
+import {
+  loginSchema,
+  passwordChangeSchema,
+  recoverBeginSchema,
+  recoverCompleteSchema,
+  recoveryRotateSchema,
+  refreshSchema,
+  registerSchema,
+  saltRequestSchema,
+} from '../auth/schemas'
+import {
+  b64u,
+  newRefreshToken,
+  safeEqual,
+  sha256,
+  signAccessToken,
+  signPurposeToken,
+  verifyPurposeToken,
+} from '../auth/tokens'
+import type { AuthedEnv } from '../deps'
 import { AppError } from '../errors'
 import { clientIp, rateLimit } from '../rateLimit'
 import { parseJson } from '../validate'
 
-export const auth = new Hono<AppEnv>()
+export const auth = new Hono<AuthedEnv>()
+
+const RECOVERY_TOKEN_SECONDS = 600
+
+/** Per-user limit for sensitive actions behind a login. Wrong attempts count too. */
+const perUser = (group: string, limit: number, windowSec: number) =>
+  rateLimit<AuthedEnv>({ group, limit, windowSec, identity: (c) => c.get('userId') })
 
 const bytes = (b64: string) => new Uint8Array(Buffer.from(b64, 'base64url'))
 
@@ -203,3 +227,165 @@ auth.post('/logout', rateLimit({ group: 'logout', limit: 30, windowSec: 60 }), a
   // Idempotent and uniform: unknown tokens get the same answer.
   return c.body(null, 204)
 })
+
+// --- change password (signed in) --------------------------------------------------------------
+
+auth.post('/password/change', requireAuth, perUser('pw-change', 5, 900), async (c) => {
+  const deps = c.get('deps')
+  const body = await parseJson(c, passwordChangeSchema)
+  const db = deps.getDb()
+  const userId = c.get('userId')
+
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+  if (!user || !safeEqual(sha256(bytes(body.currentAuthKey)), user.authHash)) {
+    throw new AppError('INVALID_CREDENTIALS', 'Wrong password')
+  }
+
+  const now = deps.now()
+  await db.transaction(async (tx) => {
+    await tx
+      .update(users)
+      .set({
+        authHash: sha256(bytes(body.newAuthKey)),
+        kdfSalt: bytes(body.newKdfSalt),
+        kdfParams: body.newKdfParams,
+        wrappedVkPw: bytes(body.newWrappedVkPw),
+      })
+      .where(eq(users.id, userId))
+    // Every other device is signed out. This one keeps its session.
+    await tx
+      .update(sessions)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(sessions.userId, userId),
+          ne(sessions.id, c.get('sessionId')),
+          isNull(sessions.revokedAt),
+        ),
+      )
+  })
+  return c.body(null, 204)
+})
+
+// --- rotate the recovery key (signed in) ------------------------------------------------------
+
+auth.post('/recovery/rotate', requireAuth, perUser('recovery-rotate', 5, 900), async (c) => {
+  const deps = c.get('deps')
+  const body = await parseJson(c, recoveryRotateSchema)
+  const db = deps.getDb()
+  const userId = c.get('userId')
+
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+  if (!user || !safeEqual(sha256(bytes(body.currentAuthKey)), user.authHash)) {
+    throw new AppError('INVALID_CREDENTIALS', 'Wrong password')
+  }
+  await db
+    .update(users)
+    .set({
+      wrappedVkRec: bytes(body.newWrappedVkRec),
+      recoveryAuthHash: sha256(bytes(body.newRecoveryAuth)),
+    })
+    .where(eq(users.id, userId))
+  return c.body(null, 204)
+})
+
+// --- forgot password: step 1, prove possession of the recovery key ----------------------------
+
+auth.post(
+  '/recover/begin',
+  rateLimit({ group: 'recover-ip', limit: 5, windowSec: 3600 }),
+  rateLimit({ group: 'recover-user', limit: 5, windowSec: 3600, identity: (c) => usernameOf(c) }),
+  async (c) => {
+    const deps = c.get('deps')
+    const jwtSecret = requireSecret(deps.getEnv().JWT_SECRET, 'JWT_SECRET')
+    const { username, recoveryAuth } = await parseJson(c, recoverBeginSchema)
+
+    const [user] = await deps
+      .getDb()
+      .select()
+      .from(users)
+      .where(eq(users.username, username))
+      .limit(1)
+    const supplied = sha256(bytes(recoveryAuth))
+    const ok = safeEqual(supplied, user ? user.recoveryAuthHash : DUMMY_HASH) && user !== undefined
+    if (!user || !ok) throw new AppError('INVALID_CREDENTIALS', 'Wrong username or recovery key')
+
+    // The token carries a fingerprint of the current recovery hash. Completing recovery replaces
+    // that hash, so the token can be used exactly once without any extra table.
+    const token = signPurposeToken(
+      jwtSecret,
+      'recover',
+      { sub: user.id, rh: b64u(user.recoveryAuthHash.subarray(0, 8)) },
+      Math.floor(deps.now().getTime() / 1000),
+      RECOVERY_TOKEN_SECONDS,
+    )
+    return c.json({
+      wrappedVkRec: b64u(user.wrappedVkRec),
+      recoveryToken: token,
+      expiresIn: RECOVERY_TOKEN_SECONDS,
+    })
+  },
+)
+
+// --- forgot password: step 2, set the new password and the replacement recovery key -----------
+
+auth.post(
+  '/recover/complete',
+  rateLimit({ group: 'recover-complete', limit: 10, windowSec: 3600 }),
+  async (c) => {
+    const deps = c.get('deps')
+    const jwtSecret = requireSecret(deps.getEnv().JWT_SECRET, 'JWT_SECRET')
+    const body = await parseJson(c, recoverCompleteSchema)
+    const db = deps.getDb()
+    const now = deps.now()
+
+    const claims = verifyPurposeToken(
+      jwtSecret,
+      'recover',
+      body.recoveryToken,
+      Math.floor(now.getTime() / 1000),
+    )
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, claims.sub ?? ''))
+      .limit(1)
+    const spent = () => new AppError('UNAUTHENTICATED', 'Recovery session ended. Start again.')
+    if (!user || claims.rh !== b64u(user.recoveryAuthHash.subarray(0, 8))) throw spent()
+
+    const newRecoveryHash = sha256(bytes(body.newRecoveryAuth))
+    if (safeEqual(newRecoveryHash, user.recoveryAuthHash)) {
+      throw new AppError('VALIDATION', 'A new recovery key is required')
+    }
+
+    await db.transaction(async (tx) => {
+      // The WHERE on the old recovery hash makes this atomic: of two concurrent attempts with
+      // the same token, only one can succeed.
+      const updated = await tx
+        .update(users)
+        .set({
+          authHash: sha256(bytes(body.newAuthKey)),
+          kdfSalt: bytes(body.newKdfSalt),
+          kdfParams: body.newKdfParams,
+          wrappedVkPw: bytes(body.newWrappedVkPw),
+          wrappedVkRec: bytes(body.newWrappedVkRec),
+          recoveryAuthHash: newRecoveryHash,
+          // A second factor must be set up again after recovery.
+          totpEnabled: false,
+          totpSecretEnc: null,
+          totpPendingEnc: null,
+          lastLoginAt: now,
+        })
+        .where(and(eq(users.id, user.id), eq(users.recoveryAuthHash, user.recoveryAuthHash)))
+        .returning({ id: users.id })
+      if (updated.length === 0) throw spent()
+      await tx
+        .update(sessions)
+        .set({ revokedAt: now })
+        .where(and(eq(sessions.userId, user.id), isNull(sessions.revokedAt)))
+    })
+
+    const tokens = await createSession(db, jwtSecret, user.id, now)
+    return c.json(tokens)
+  },
+)

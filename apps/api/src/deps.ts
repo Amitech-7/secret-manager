@@ -14,3 +14,8 @@ export interface Deps {
 }
 
 export type AppEnv = { Variables: { deps: Deps } }
+
+/** Environment for routes behind requireAuth. */
+export type AuthedEnv = {
+  Variables: { deps: Deps; userId: string; sessionId: string }
+}

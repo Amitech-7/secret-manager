@@ -1,17 +1,15 @@
 import { and, eq, isNull, sessions, sql } from '@sm/db'
 import type { MiddlewareHandler } from 'hono'
-import type { AppEnv } from '../deps'
+import type { AuthedEnv } from '../deps'
 import { AppError } from '../errors'
 import { requireSecret } from './secrets'
 import { verifyAccessToken } from './tokens'
-
-export type AuthVars = { userId: string; sessionId: string }
 
 /**
  * Verifies the bearer token, then checks the session is still alive. The database check is what
  * makes logout and refresh-reuse revocation take effect immediately instead of after 15 minutes.
  */
-export const requireAuth: MiddlewareHandler<AppEnv & { Variables: AuthVars }> = async (c, next) => {
+export const requireAuth: MiddlewareHandler<AuthedEnv> = async (c, next) => {
   const deps = c.get('deps')
   const header = c.req.header('authorization') ?? ''
   const token = header.startsWith('Bearer ') ? header.slice(7) : ''

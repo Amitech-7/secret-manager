@@ -44,16 +44,18 @@ export async function hit(
   return { count: row?.count ?? 1, retryAfter }
 }
 
-export interface RateLimitOptions {
+export interface RateLimitOptions<E extends AppEnv = AppEnv> {
   /** Name of the endpoint group, e.g. "auth-login". Counters are separate per group. */
   group: string
   limit: number
   windowSec: number
   /** Extra identity to count against besides the client IP, e.g. an HMAC of a username. */
-  identity?: (c: Context<AppEnv>) => string | Promise<string>
+  identity?: (c: Context<E>) => string | Promise<string>
 }
 
-export function rateLimit(options: RateLimitOptions): MiddlewareHandler<AppEnv> {
+export function rateLimit<E extends AppEnv = AppEnv>(
+  options: RateLimitOptions<E>,
+): MiddlewareHandler<E> {
   return async (c, next) => {
     const deps = c.get('deps')
     const secret = deps.getEnv().RATE_LIMIT_SECRET

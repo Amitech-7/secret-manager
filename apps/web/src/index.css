@@ -1,1 +1,48 @@
 @import 'tailwindcss';
+@import './theme/tokens.css';
+
+/* Semantic colours. Components use these names (bg-surface, text-fg, bg-accent...) instead of
+   per-theme overrides, so adding or changing a theme touches one file. */
+@theme inline {
+  --color-bg: var(--sm-bg);
+  --color-surface: var(--sm-surface);
+  --color-raised: var(--sm-raised);
+  --color-border: var(--sm-border);
+  --color-border-strong: var(--sm-border-strong);
+  --color-fg: var(--sm-fg);
+  --color-muted: var(--sm-muted);
+  --color-danger: var(--sm-danger);
+  --color-success: var(--sm-success);
+  --color-accent: var(--sm-accent);
+  --color-accent-hover: var(--sm-accent-hover);
+  --color-accent-subtle: var(--sm-accent-subtle);
+  --color-on-accent: var(--sm-on-accent);
+  --color-link: var(--sm-link);
+}
+
+@layer base {
+  html {
+    background: var(--sm-bg);
+    color: var(--sm-fg);
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+  }
+  :focus-visible {
+    outline: 2px solid var(--sm-link);
+    outline-offset: 2px;
+  }
+  ::placeholder {
+    color: var(--sm-muted);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

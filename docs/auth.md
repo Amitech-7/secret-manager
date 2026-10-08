@@ -27,6 +27,22 @@ A person therefore never ends up with an account but no recovery key.
 - The web app keeps tokens and the vault key in memory only. Closing or reloading the tab locks
   the vault.
 
+## Password change, recovery and deletion
+
+- **Change password** (signed in): re-enter the current password and pick a new one. The browser
+  derives new keys with a fresh salt and the current default Argon2id settings and re-wraps the
+  vault key; no item is re-encrypted. Every other session is signed out; this one stays.
+- **Forgot password:** username + recovery key + new password. The browser proves it holds the
+  recovery key (`/auth/recover/begin`), then shows a **replacement recovery key** that must be saved
+  before anything changes (`/auth/recover/complete`). Recovery signs out every session, turns
+  two-factor off, and signs the person in fresh. The step-1 proof lasts 10 minutes and works once.
+- **Replace recovery key** (signed in): needs the master password, because that is how the vault
+  key is re-wrapped. The old key keeps working until the new one is saved and submitted.
+- **Delete account:** needs the master password; removes the user, all items and all sessions.
+
+A wrong password on any of these is rejected locally when the old wrapping will not open, and by the
+server comparing the derived key. Wrong attempts count toward the limits below.
+
 ## Rate limits (per window)
 
 | Endpoint                        | Limit                                                    |

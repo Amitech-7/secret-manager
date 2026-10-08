@@ -1,18 +1,22 @@
 import { logout, withFreshSession, type MeResponse, type Session } from '@sm/client'
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/client'
+import { SecurityScreen } from '../security/SecurityScreen'
 import { describeError } from './errors'
-import { Button, ErrorText } from './ui'
+import { Button, ButtonRow, Card, ErrorText, Notice } from './ui'
 
 export function SignedIn({
   session,
+  notice,
   onSessionChange,
   onLoggedOut,
 }: {
   session: Session
+  notice?: string | null
   onSessionChange: (s: Session) => void
   onLoggedOut: () => void
 }) {
+  const [screen, setScreen] = useState<'home' | 'settings'>('home')
   const [me, setMe] = useState<MeResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -40,20 +44,38 @@ export function SignedIn({
     onLoggedOut()
   }
 
+  if (screen === 'settings') {
+    return (
+      <SecurityScreen
+        session={session}
+        onSessionChange={onSessionChange}
+        onBack={() => setScreen('home')}
+        onDeleted={onLoggedOut}
+      />
+    )
+  }
+
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Signed in as {session.username}</h2>
-      <p className="text-green-600">Your vault is unlocked on this device.</p>
-      {me ? (
-        <p className="text-sm text-slate-500">
-          {me.itemCount} of {me.itemQuota} items stored. Vault screens arrive in the next
-          milestones.
-        </p>
-      ) : null}
-      {error ? <ErrorText>{error}</ErrorText> : null}
-      <Button variant="secondary" onClick={() => void logOut()}>
-        Log out
-      </Button>
+      {notice ? <Notice>{notice}</Notice> : null}
+      <Card title={`Signed in as ${session.username}`}>
+        <p className="text-success">Your vault is unlocked on this device.</p>
+        {me ? (
+          <p className="text-sm text-muted">
+            {me.itemCount} of {me.itemQuota} items stored. Vault screens arrive in the next
+            milestones.
+          </p>
+        ) : null}
+        {error ? <ErrorText>{error}</ErrorText> : null}
+        <ButtonRow>
+          <Button variant="secondary" onClick={() => setScreen('settings')}>
+            Settings
+          </Button>
+          <Button variant="secondary" onClick={() => void logOut()}>
+            Log out
+          </Button>
+        </ButtonRow>
+      </Card>
     </div>
   )
 }

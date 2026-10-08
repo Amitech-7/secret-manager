@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+/** Shared building blocks. Phone-first: 44px touch targets, 16px inputs (stops iOS zooming in). */
+
 export function Field(props: {
   label: string
   type?: string
@@ -8,24 +10,45 @@ export function Field(props: {
   autoComplete?: string
   hint?: string
   disabled?: boolean
+  multiline?: boolean
+  mono?: boolean
 }) {
+  const className =
+    'w-full rounded-lg border border-border-strong bg-surface px-3 text-base text-fg disabled:opacity-60 ' +
+    (props.multiline ? 'min-h-24 py-2 ' : 'min-h-11 ') +
+    (props.mono ? 'font-mono text-sm ' : '')
+  const common = {
+    className,
+    value: props.value,
+    autoComplete: props.autoComplete,
+    disabled: props.disabled,
+    autoCapitalize: 'none' as const,
+    autoCorrect: 'off',
+    spellCheck: false,
+  }
   return (
     <label className="block">
       <span className="mb-1 block text-sm font-medium">{props.label}</span>
-      <input
-        className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-slate-900 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-        type={props.type ?? 'text'}
-        value={props.value}
-        autoComplete={props.autoComplete}
-        disabled={props.disabled}
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
-        onChange={(e) => props.onChange(e.target.value)}
-      />
-      {props.hint ? <span className="mt-1 block text-xs text-slate-500">{props.hint}</span> : null}
+      {props.multiline ? (
+        <textarea {...common} onChange={(e) => props.onChange(e.target.value)} />
+      ) : (
+        <input
+          {...common}
+          type={props.type ?? 'text'}
+          onChange={(e) => props.onChange(e.target.value)}
+        />
+      )}
+      {props.hint ? <span className="mt-1 block text-xs text-muted">{props.hint}</span> : null}
     </label>
   )
+}
+
+type Variant = 'primary' | 'secondary' | 'danger'
+
+const VARIANTS: Record<Variant, string> = {
+  primary: 'bg-accent text-on-accent hover:bg-accent-hover',
+  secondary: 'border border-border-strong bg-surface text-fg hover:bg-raised',
+  danger: 'border border-danger bg-surface text-danger hover:bg-raised',
 }
 
 export function Button(props: {
@@ -33,19 +56,16 @@ export function Button(props: {
   onClick?: () => void
   type?: 'button' | 'submit'
   disabled?: boolean
-  variant?: 'primary' | 'secondary'
+  variant?: Variant
 }) {
-  const primary = props.variant !== 'secondary'
   return (
     <button
       type={props.type ?? 'button'}
       disabled={props.disabled}
       onClick={props.onClick}
       className={
-        'rounded px-4 py-2 font-medium disabled:cursor-not-allowed disabled:opacity-50 ' +
-        (primary
-          ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-          : 'border border-slate-300 dark:border-slate-700')
+        'min-h-11 w-full rounded-lg px-4 font-medium disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto ' +
+        VARIANTS[props.variant ?? 'primary']
       }
     >
       {props.children}
@@ -53,10 +73,31 @@ export function Button(props: {
   )
 }
 
+export function ButtonRow({ children }: { children: ReactNode }) {
+  return <div className="flex flex-col gap-2 sm:flex-row">{children}</div>
+}
+
 export function ErrorText({ children }: { children: ReactNode }) {
   return (
-    <p role="alert" className="text-sm text-red-600">
+    <p role="alert" className="text-sm text-danger">
       {children}
     </p>
+  )
+}
+
+export function Notice({ children }: { children: ReactNode }) {
+  return (
+    <p role="status" className="rounded-lg bg-accent-subtle p-3 text-sm text-fg">
+      {children}
+    </p>
+  )
+}
+
+export function Card({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <section className="space-y-4 rounded-xl border border-border bg-surface p-4 sm:p-6">
+      {title ? <h2 className="text-lg font-semibold">{title}</h2> : null}
+      {children}
+    </section>
   )
 }
