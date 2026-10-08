@@ -19,6 +19,19 @@ describe('describeError', () => {
     expect(describeError(e('RATE_LIMITED'))).toContain('1 minute.')
   })
 
+  it('explains local cryptographic failures without leaking details', () => {
+    const crypto = (code: string) => Object.assign(new Error('internal detail'), { code })
+    expect(describeError(crypto('INVALID_RECOVERY_KEY'))).toContain('recovery key')
+    expect(describeError(crypto('DECRYPT_FAILED'))).toContain('password is wrong')
+    expect(describeError(crypto('SOMETHING_ELSE'))).toBe('Something went wrong. Please try again.')
+    expect(describeError(crypto('DECRYPT_FAILED'))).not.toContain('internal detail')
+  })
+
+  it('treats an expired or spent step as "start again"', () => {
+    expect(describeError(e('TOKEN_EXPIRED'))).toContain('start again')
+    expect(describeError(e('UNAUTHENTICATED'))).toContain('start again')
+  })
+
   it('never shows server text and has a safe default', () => {
     expect(describeError(e('INTERNAL'))).not.toContain('server text')
     expect(describeError(new Error('postgres://secret@host'))).toBe(

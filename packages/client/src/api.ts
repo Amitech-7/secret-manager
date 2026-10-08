@@ -51,6 +51,8 @@ export interface LoginResponse extends TokenPair {
 
 export interface MeResponse {
   username: string
+  kdfSalt: string
+  wrappedVkPw: string
   profileEnc: string | null
   totpEnabled: boolean
   itemCount: number
@@ -58,6 +60,19 @@ export interface MeResponse {
   maxItemBytes: number
   kdfParams: KdfParams
   createdAt: string
+}
+
+export interface NewCredentials {
+  newAuthKey: string
+  newKdfSalt: string
+  newKdfParams: KdfParams
+  newWrappedVkPw: string
+}
+
+export interface RecoverBeginResponse {
+  wrappedVkRec: string
+  recoveryToken: string
+  expiresIn: number
 }
 
 export interface ApiClientOptions {
@@ -107,6 +122,23 @@ export function createApiClient(options: ApiClientOptions = {}) {
     refresh: (refreshToken: string) => call<TokenPair>('POST', '/auth/refresh', { refreshToken }),
     logout: (refreshToken: string) => call<void>('POST', '/auth/logout', { refreshToken }),
     me: (accessToken: string) => call<MeResponse>('GET', '/me', undefined, accessToken),
+    changePassword: (accessToken: string, body: NewCredentials & { currentAuthKey: string }) =>
+      call<void>('POST', '/auth/password/change', body, accessToken),
+    rotateRecovery: (
+      accessToken: string,
+      body: { currentAuthKey: string; newWrappedVkRec: string; newRecoveryAuth: string },
+    ) => call<void>('POST', '/auth/recovery/rotate', body, accessToken),
+    recoverBegin: (username: string, recoveryAuth: string) =>
+      call<RecoverBeginResponse>('POST', '/auth/recover/begin', { username, recoveryAuth }),
+    recoverComplete: (
+      body: NewCredentials & {
+        recoveryToken: string
+        newWrappedVkRec: string
+        newRecoveryAuth: string
+      },
+    ) => call<TokenPair>('POST', '/auth/recover/complete', body),
+    deleteAccount: (accessToken: string, authKey: string) =>
+      call<void>('DELETE', '/me', { authKey }, accessToken),
   }
 }
 

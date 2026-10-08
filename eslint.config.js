@@ -13,6 +13,11 @@ export default defineConfig(
     languageOptions: { globals: globals.node },
   },
   {
+    // Plain browser scripts served as-is from public/ (not bundled).
+    files: ['apps/web/public/**/*.js'],
+    languageOptions: { globals: globals.browser, sourceType: 'script' },
+  },
+  {
     // Web app: browser globals, React hooks rules, and it must never touch the DB package.
     files: ['apps/web/**/*.{ts,tsx}'],
     languageOptions: { globals: globals.browser },

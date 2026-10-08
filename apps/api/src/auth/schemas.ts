@@ -84,3 +84,37 @@ export const loginSchema = z
 export const refreshSchema = z
   .object({ refreshToken: fixedBytes(WIRE_BYTES.refreshToken) })
   .strict()
+
+const newCredentials = {
+  newAuthKey: fixedBytes(WIRE_BYTES.authKey),
+  newKdfSalt: fixedBytes(WIRE_BYTES.kdfSalt),
+  newKdfParams: kdfParamsSchema,
+  newWrappedVkPw: fixedBytes(WIRE_BYTES.wrappedVaultKey),
+}
+
+export const passwordChangeSchema = z
+  .object({ currentAuthKey: fixedBytes(WIRE_BYTES.authKey), ...newCredentials })
+  .strict()
+
+export const recoveryRotateSchema = z
+  .object({
+    currentAuthKey: fixedBytes(WIRE_BYTES.authKey),
+    newWrappedVkRec: fixedBytes(WIRE_BYTES.wrappedVaultKey),
+    newRecoveryAuth: fixedBytes(WIRE_BYTES.recoveryAuth),
+  })
+  .strict()
+
+export const recoverBeginSchema = z
+  .object({ username: usernameSchema, recoveryAuth: fixedBytes(WIRE_BYTES.recoveryAuth) })
+  .strict()
+
+export const recoverCompleteSchema = z
+  .object({
+    recoveryToken: z.string().min(20).max(1024),
+    ...newCredentials,
+    newWrappedVkRec: fixedBytes(WIRE_BYTES.wrappedVaultKey),
+    newRecoveryAuth: fixedBytes(WIRE_BYTES.recoveryAuth),
+  })
+  .strict()
+
+export const deleteAccountSchema = z.object({ authKey: fixedBytes(WIRE_BYTES.authKey) }).strict()

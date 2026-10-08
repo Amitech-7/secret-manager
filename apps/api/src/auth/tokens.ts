@@ -75,3 +75,50 @@ export function verifyAccessToken(secret: string, token: string, nowSec: number)
   if (claims.exp <= nowSec) throw new AppError('TOKEN_EXPIRED', 'Token expired')
   return claims as AccessClaims
 }
+
+// --- Purpose tokens (e.g. password recovery). Each purpose has its own derived signing key, so a
+// --- token for one purpose can never be accepted as another, or as an access token.
+
+const subkey = (secret: string, purpose: string): string =>
+  createHmac('sha256', secret).update(`subkey:${purpose}`).digest('hex')
+
+export function signPurposeToken(
+  secret: string,
+  purpose: string,
+  claims: Record<string, string>,
+  nowSec: number,
+  ttlSec: number,
+): string {
+  const payload = b64u(
+    Buffer.from(JSON.stringify({ ...claims, pur: purpose, iat: nowSec, exp: nowSec + ttlSec })),
+  )
+  const input = `${HEADER}.${payload}`
+  return `${input}.${b64u(mac(subkey(secret, purpose), input))}`
+}
+
+export function verifyPurposeToken(
+  secret: string,
+  purpose: string,
+  token: string,
+  nowSec: number,
+): Record<string, string> {
+  const invalid = () => new AppError('UNAUTHENTICATED', 'Invalid token')
+  const parts = token.split('.')
+  if (parts.length !== 3) throw invalid()
+  const [header, payload, signature] = parts as [string, string, string]
+  if (header !== HEADER) throw invalid()
+  const expected = mac(subkey(secret, purpose), `${header}.${payload}`)
+  if (!safeEqual(expected, Buffer.from(signature, 'base64url'))) throw invalid()
+  let claims: Record<string, unknown>
+  try {
+    claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Record<
+      string,
+      unknown
+    >
+  } catch {
+    throw invalid()
+  }
+  if (claims.pur !== purpose || typeof claims.exp !== 'number') throw invalid()
+  if (claims.exp <= nowSec) throw new AppError('TOKEN_EXPIRED', 'Token expired')
+  return claims as Record<string, string>
+}

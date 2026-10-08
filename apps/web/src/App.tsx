@@ -1,17 +1,20 @@
 import type { Session } from '@sm/client'
 import { useEffect, useState } from 'react'
+import { ForgotPassword } from './features/auth/ForgotPassword'
 import { LoginForm } from './features/auth/LoginForm'
 import { RegisterFlow } from './features/auth/RegisterFlow'
 import { SignedIn } from './features/auth/SignedIn'
-import { Button } from './features/auth/ui'
+import { Button, ButtonRow, Card, Notice } from './features/auth/ui'
 import { apiUrl } from './lib/api'
+import { ThemeControls } from './theme/ThemeControls'
 
-type View = 'home' | 'login' | 'register'
+type View = 'home' | 'login' | 'register' | 'forgot'
 type Health = 'checking' | 'ok' | 'down'
 
 export default function App() {
   const [view, setView] = useState<View>('home')
   const [session, setSession] = useState<Session | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [health, setHealth] = useState<Health>('checking')
   const contactEmail = import.meta.env.VITE_CONTACT_EMAIL
 
@@ -28,49 +31,95 @@ export default function App() {
 
   const signOut = () => {
     setSession(null)
+    setNotice(null)
     setView('home')
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <header className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-        <h1 className="text-lg font-semibold">Secret Manager</h1>
+    <div className="flex min-h-dvh flex-col bg-bg text-fg">
+      <header className="sticky top-0 z-10 border-b border-border bg-surface pt-[env(safe-area-inset-top)]">
+        <div className="mx-auto flex w-full max-w-md items-center justify-between gap-2 px-4 py-2">
+          <h1 className="text-lg font-semibold">Secret Manager</h1>
+          <details className="relative">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-lg border border-border-strong px-3 text-sm">
+              Theme
+            </summary>
+            <div className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface p-4 shadow-lg">
+              <ThemeControls />
+            </div>
+          </details>
+        </div>
       </header>
 
-      <main className="mx-auto w-full max-w-md flex-1 px-4 py-8">
+      <main className="mx-auto w-full max-w-md flex-1 px-4 py-6 sm:py-10">
         {session ? (
-          <SignedIn session={session} onSessionChange={setSession} onLoggedOut={signOut} />
+          <SignedIn
+            session={session}
+            notice={notice}
+            onSessionChange={setSession}
+            onLoggedOut={signOut}
+          />
         ) : view === 'login' ? (
-          <LoginForm onSession={setSession} onBack={() => setView('home')} />
+          <LoginForm
+            onSession={(s) => {
+              setNotice(null)
+              setSession(s)
+            }}
+            onBack={() => setView('home')}
+            onForgot={() => setView('forgot')}
+          />
         ) : view === 'register' ? (
-          <RegisterFlow onSession={setSession} onBack={() => setView('home')} />
+          <RegisterFlow
+            onSession={(s) => {
+              setNotice(null)
+              setSession(s)
+            }}
+            onBack={() => setView('home')}
+          />
+        ) : view === 'forgot' ? (
+          <ForgotPassword
+            onSession={(s, message) => {
+              setNotice(message)
+              setSession(s)
+            }}
+            onBack={() => setView('login')}
+          />
         ) : (
-          <div className="space-y-4">
+          <Card>
             <p>Keep your credentials and cards encrypted on your own device.</p>
-            <div className="flex gap-2">
+            <ButtonRow>
               <Button onClick={() => setView('login')}>Log in</Button>
               <Button variant="secondary" onClick={() => setView('register')}>
                 Register
               </Button>
-            </div>
-          </div>
+            </ButtonRow>
+            {notice ? <Notice>{notice}</Notice> : null}
+          </Card>
         )}
       </main>
 
-      <footer className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
-        <span className="flex gap-4">
-          <a className="underline" href="https://github.com/">
-            Documentation
-          </a>
-          {session && contactEmail ? (
-            <a className="underline" href={`mailto:${contactEmail}`}>
-              Contact Us
+      <footer className="border-t border-border bg-surface pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex w-full max-w-md items-center justify-between gap-2 px-4 py-3 text-sm">
+          <span className="flex gap-4">
+            <a
+              className="inline-flex min-h-11 items-center text-link underline"
+              href="https://github.com/"
+            >
+              Documentation
             </a>
-          ) : null}
-        </span>
-        <span className="text-slate-500" data-testid="api-status">
-          Server: {health}
-        </span>
+            {session && contactEmail ? (
+              <a
+                className="inline-flex min-h-11 items-center text-link underline"
+                href={`mailto:${contactEmail}`}
+              >
+                Contact Us
+              </a>
+            ) : null}
+          </span>
+          <span className="text-muted" data-testid="api-status">
+            Server: {health}
+          </span>
+        </div>
       </footer>
     </div>
   )

@@ -1,6 +1,14 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { newRefreshToken, safeEqual, sha256, signAccessToken, verifyAccessToken } from './tokens'
+import {
+  newRefreshToken,
+  safeEqual,
+  sha256,
+  signAccessToken,
+  signPurposeToken,
+  verifyAccessToken,
+  verifyPurposeToken,
+} from './tokens'
 
 const SECRET = 's'.repeat(40)
 const NOW = 1_800_000_000
@@ -91,5 +99,40 @@ describe('refresh tokens and helpers', () => {
     expect(safeEqual(Uint8Array.of(1, 2), Uint8Array.of(1, 2))).toBe(true)
     expect(safeEqual(Uint8Array.of(1, 2), Uint8Array.of(1, 3))).toBe(false)
     expect(safeEqual(Uint8Array.of(1), Uint8Array.of(1, 2))).toBe(false)
+  })
+})
+
+describe('purpose tokens', () => {
+  const sign = (purpose = 'recover', ttl = 600) =>
+    signPurposeToken(SECRET, purpose, { sub: 'u1', rh: 'abc' }, NOW, ttl)
+
+  it('round-trips claims for the right purpose', () => {
+    const claims = verifyPurposeToken(SECRET, 'recover', sign(), NOW + 5)
+    expect(claims).toMatchObject({ sub: 'u1', rh: 'abc', pur: 'recover' })
+  })
+
+  it('cannot be used for another purpose, or as an access token (and vice versa)', () => {
+    expect(codeOf(() => verifyPurposeToken(SECRET, 'other', sign(), NOW))).toBe('UNAUTHENTICATED')
+    expect(codeOf(() => verifyAccessToken(SECRET, sign(), NOW))).toBe('UNAUTHENTICATED')
+    const access = signAccessToken(SECRET, { sub: 'u1', sid: 's1' }, NOW, 900)
+    expect(codeOf(() => verifyPurposeToken(SECRET, 'recover', access, NOW))).toBe('UNAUTHENTICATED')
+  })
+
+  it('expires, and rejects tampering and a wrong secret', () => {
+    expect(codeOf(() => verifyPurposeToken(SECRET, 'recover', sign(), NOW + 600))).toBe(
+      'TOKEN_EXPIRED',
+    )
+    const [h, , sig] = sign().split('.') as [string, string, string]
+    const forged = `${h}.${b64({ sub: 'victim', rh: 'abc', pur: 'recover', iat: NOW, exp: NOW + 600 })}.${sig}`
+    expect(codeOf(() => verifyPurposeToken(SECRET, 'recover', forged, NOW))).toBe('UNAUTHENTICATED')
+    expect(codeOf(() => verifyPurposeToken('x'.repeat(40), 'recover', sign(), NOW))).toBe(
+      'UNAUTHENTICATED',
+    )
+  })
+
+  it('a token forged with the raw secret (not the purpose key) is rejected', () => {
+    const header = { alg: 'HS256', typ: 'JWT' }
+    const forged = forge(header, { sub: 'u1', rh: 'abc', pur: 'recover', iat: NOW, exp: NOW + 600 })
+    expect(codeOf(() => verifyPurposeToken(SECRET, 'recover', forged, NOW))).toBe('UNAUTHENTICATED')
   })
 })

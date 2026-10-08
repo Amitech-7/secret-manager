@@ -12,7 +12,7 @@
     "build": "pnpm --filter @sm/api build && pnpm --filter @sm/web build",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
+    "test": "pnpm -r --workspace-concurrency=1 test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"
