@@ -2,6 +2,11 @@
 export const LIMITS = {
   maxItemsPerUser: 1000,
   maxItemBytes: 8 * 1024,
+  /**
+   * Rows per GET /vault/items page. Sized so a page of maximum-size items stays well under the
+   * 4.5 MB function response cap on Vercel (see the bound test in index.test.ts).
+   */
+  vaultPageMaxItems: 300,
   usernameMin: 3,
   usernameMax: 32,
 } as const
@@ -35,7 +40,6 @@ export interface ApiError {
 export const ITEM_TYPES = [
   'credential',
   'card',
-  'note',
   'member',
   'bank',
   'account_type',

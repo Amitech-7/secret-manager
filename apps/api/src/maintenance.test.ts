@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { rateLimits, sessions, users, vaultItems } from '@sm/db'
+import { eq, rateLimits, sessions, users, vaultItems } from '@sm/db'
 import { createApp } from './app'
 import { runMaintenance } from './maintenance'
 import { addUser, harness, type Harness } from './testkit'
@@ -14,12 +14,59 @@ const daysAgo = (n: number) => new Date(h.clock.now.getTime() - n * 86_400_000)
 const hash = (fill: number) => new Uint8Array(32).fill(fill)
 
 describe('maintenance', () => {
+  it('treats starter reference items as empty, but keeps anyone with a credential or card', async () => {
+    const seedOnly = await addUser(h.db, 'seed.only', {
+      createdAt: daysAgo(300),
+      lastLoginAt: daysAgo(200),
+      itemCount: 12,
+    })
+    const withCard = await addUser(h.db, 'seed.and.card', {
+      createdAt: daysAgo(300),
+      lastLoginAt: daysAgo(200),
+      itemCount: 13,
+    })
+    const row = (userId: string, type: string) => ({
+      id: crypto.randomUUID(),
+      userId,
+      type,
+      ciphertext: new Uint8Array(40),
+    })
+    await h.db
+      .insert(vaultItems)
+      .values([
+        row(seedOnly, 'member'),
+        row(seedOnly, 'bank'),
+        row(seedOnly, 'account'),
+        row(seedOnly, 'account_type'),
+        row(withCard, 'member'),
+        row(withCard, 'card'),
+      ])
+
+    const result = await runMaintenance(h.db, h.clock.now, 512)
+    expect(result.inactiveUsersDeleted).toBeGreaterThanOrEqual(1)
+    const names = (await h.db.select({ n: users.username }).from(users)).map((r) => r.n)
+    expect(names).not.toContain('seed.only')
+    expect(names).toContain('seed.and.card')
+    // Its reference items went with it (cascade); the other user's two rows stay.
+    expect(
+      (await h.db.select().from(vaultItems).where(eq(vaultItems.userId, seedOnly))).length,
+    ).toBe(0)
+    expect(
+      (await h.db.select().from(vaultItems).where(eq(vaultItems.userId, withCard))).length,
+    ).toBe(2)
+
+    // Tests share one database, so leave it as we found it.
+    await h.db.delete(users).where(eq(users.id, withCard))
+  })
+
   it('purges only what it should', async () => {
     const stale = await addUser(h.db, 'stale.empty', {
       createdAt: daysAgo(200),
       lastLoginAt: daysAgo(120),
     })
-    const neverLoggedIn = await addUser(h.db, 'never.login', { createdAt: daysAgo(100) })
+    const neverLoggedIn = await addUser(h.db, 'never.login', {
+      createdAt: daysAgo(100),
+    })
     const recent = await addUser(h.db, 'recent.empty', {
       createdAt: daysAgo(100),
       lastLoginAt: daysAgo(10),
@@ -39,7 +86,12 @@ describe('maintenance', () => {
     await h.db.insert(sessions).values([
       { userId: recent, refreshHash: hash(1), expiresAt: daysAgo(30) }, // long expired
       { userId: recent, refreshHash: hash(2), expiresAt: daysAgo(-5) }, // still valid
-      { userId: recent, refreshHash: hash(3), expiresAt: daysAgo(-5), revokedAt: daysAgo(20) }, // revoked long ago
+      {
+        userId: recent,
+        refreshHash: hash(3),
+        expiresAt: daysAgo(-5),
+        revokedAt: daysAgo(20),
+      }, // revoked long ago
       { userId: recent, refreshHash: hash(4), expiresAt: daysAgo(3) }, // expired recently, kept for a week
     ])
     await h.db.insert(rateLimits).values([

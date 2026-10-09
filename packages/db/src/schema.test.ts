@@ -96,15 +96,7 @@ describe('users constraints', () => {
 describe('vault_items constraints', () => {
   it('accept every known item type', async () => {
     const { rows } = await insertUser('types.user')
-    for (const type of [
-      'credential',
-      'card',
-      'note',
-      'member',
-      'bank',
-      'account_type',
-      'account',
-    ]) {
+    for (const type of ['credential', 'card', 'member', 'bank', 'account_type', 'account']) {
       await insertItem(rows[0]!.id, type, 40)
     }
   })
@@ -113,6 +105,7 @@ describe('vault_items constraints', () => {
     const { rows } = await insertUser('limits.user')
     const id = rows[0]!.id
     await expect(insertItem(id, 'password', 40)).rejects.toThrow()
+    await expect(insertItem(id, 'note', 40)).rejects.toThrow()
     await expect(insertItem(id, 'credential', 28)).rejects.toThrow()
     await expect(insertItem(id, 'credential', 8193)).rejects.toThrow()
     await insertItem(id, 'credential', 29)

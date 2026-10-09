@@ -75,6 +75,27 @@ export interface RecoverBeginResponse {
   expiresIn: number
 }
 
+export interface ItemRecord {
+  id: string
+  type: ItemType
+  ciphertext: string
+  version: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ItemsPage {
+  items: ItemRecord[]
+  /** Pass as `after` to get the next page; null when there is nothing more. */
+  nextCursor: string | null
+}
+
+export interface ItemWriteResponse {
+  id: string
+  version: number
+  updatedAt: string
+}
+
 export interface ApiClientOptions {
   /** Empty for same-origin web; the full origin for the mobile app. */
   baseUrl?: string
@@ -139,6 +160,22 @@ export function createApiClient(options: ApiClientOptions = {}) {
     ) => call<TokenPair>('POST', '/auth/recover/complete', body),
     deleteAccount: (accessToken: string, authKey: string) =>
       call<void>('DELETE', '/me', { authKey }, accessToken),
+    listItems: (accessToken: string, page: { after?: string; limit?: number } = {}) => {
+      const query = new URLSearchParams()
+      if (page.after) query.set('after', page.after)
+      if (page.limit) query.set('limit', String(page.limit))
+      const qs = query.size > 0 ? `?${query}` : ''
+      return call<ItemsPage>('GET', `/vault/items${qs}`, undefined, accessToken)
+    },
+    createItem: (accessToken: string, body: { id: string; type: ItemType; ciphertext: string }) =>
+      call<ItemWriteResponse>('POST', '/vault/items', body, accessToken),
+    updateItem: (
+      accessToken: string,
+      id: string,
+      body: { baseVersion: number; ciphertext: string },
+    ) => call<ItemWriteResponse>('PUT', `/vault/items/${id}`, body, accessToken),
+    deleteItem: (accessToken: string, id: string) =>
+      call<void>('DELETE', `/vault/items/${id}`, undefined, accessToken),
   }
 }
 
