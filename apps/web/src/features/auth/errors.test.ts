@@ -13,6 +13,14 @@ describe('describeError', () => {
     expect(describeError(e('NETWORK'))).toContain('connection')
   })
 
+  it('explains vault conflicts and limits', () => {
+    expect(describeError(e('VERSION_CONFLICT'))).toContain('another device')
+    expect(describeError(e('QUOTA_EXCEEDED'))).toContain('1,000')
+    expect(describeError(e('NOT_FOUND'))).toContain('no longer exists')
+    const tooLarge = Object.assign(new Error('x'), { code: 'ITEM_TOO_LARGE' })
+    expect(describeError(tooLarge)).toContain('too large')
+  })
+
   it('turns retry-after seconds into whole minutes', () => {
     expect(describeError(e('RATE_LIMITED', 30))).toContain('1 minute.')
     expect(describeError(e('RATE_LIMITED', 600))).toContain('10 minutes.')

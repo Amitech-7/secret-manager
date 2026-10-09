@@ -29,9 +29,9 @@ export default function App() {
     return () => controller.abort()
   }, [])
 
-  const signOut = () => {
+  const signOut = (message?: string) => {
     setSession(null)
-    setNotice(null)
+    setNotice(message ?? null)
     setView('home')
   }
 

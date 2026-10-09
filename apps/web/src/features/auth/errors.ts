@@ -4,6 +4,7 @@ const cryptoMessages: Record<string, string> = {
   INVALID_RECOVERY_KEY: 'That recovery key is not valid. Check it for typing mistakes.',
   DECRYPT_FAILED: 'That password is wrong.',
   INVALID_PARAMS: 'The server sent settings this app will not accept. Try again later.',
+  ITEM_TOO_LARGE: 'That item is too large to store. Shorten the text and try again.',
 }
 
 /** Friendly text for the failures a person can act on. Details never include secrets. */
@@ -25,6 +26,12 @@ export function describeError(err: unknown): string {
         return 'That step expired or was already used. Please start again.'
       case 'NETWORK':
         return 'Could not reach the server. Check your connection and try again.'
+      case 'VERSION_CONFLICT':
+        return 'This item was changed on another device. Reload to get the latest version, then try again.'
+      case 'QUOTA_EXCEEDED':
+        return 'You have reached the limit of 1,000 items. Delete something to make room.'
+      case 'NOT_FOUND':
+        return 'That item no longer exists. Reload and try again.'
       case 'VALIDATION':
         return 'Some of the details are not valid. Please check them.'
       default:
