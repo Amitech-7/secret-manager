@@ -41,13 +41,16 @@ export async function runMaintenance(
     select count(*)::int as n from d`,
   )
 
-  // Accounts that never stored anything and have not logged in for 90 days.
+  // Accounts that never stored a credential or card and have not logged in for 90 days. The
+  // starter members, banks and accounts every vault is seeded with do not count as "stored".
   const inactiveUsersDeleted = await count(
     db,
     sql`
     with d as (
       delete from users
-      where item_count = 0
+      where not exists (
+          select 1 from vault_items v
+          where v.user_id = users.id and v.type in ('credential', 'card'))
         and coalesce(last_login_at, created_at) < ${now}::timestamptz - interval '90 days'
       returning 1)
     select count(*)::int as n from d`,

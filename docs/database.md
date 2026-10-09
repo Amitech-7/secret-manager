@@ -74,11 +74,32 @@ $rng = [Security.Cryptography.RNGCryptoServiceProvider]::new(); $rng.GetBytes($b
 ## Maintenance job
 
 `GET /api/v1/cron/maintenance` runs daily from Vercel Cron (production only). It deletes expired
-sessions, old rate-limit rows and accounts that stored nothing and have not logged in for 90
-days, then reports database size. At 70% of `DB_SIZE_LIMIT_MB` (default 512) it logs a
+sessions, old rate-limit rows and accounts that never stored a credential or card (the starter
+members, banks and accounts do not count) and have not logged in for 90 days, then reports
+database size. At 70% of `DB_SIZE_LIMIT_MB` (default 512) it logs a
 warning, at 90% a critical warning. There is no email service, so the Vercel runtime logs are
 the alert: check them now and then.
 
 ## Quotas
 
 1,000 items per user, 8 KB per item (enforced in the API and by database CHECK constraints).
+Every row counts toward the 1,000, including the starter members, banks, accounts and account
+types, so a new vault begins with 12 used.
+
+## Vault API
+
+All routes need a signed-in session. The server stores and returns opaque ciphertext only.
+
+| Route                     | Purpose                                                                          |
+| ------------------------- | -------------------------------------------------------------------------------- |
+| `GET /vault/items`        | One page (at most 300 rows), ordered by id. Repeat with `after=<nextCursor>`.    |
+| `POST /vault/items`       | Create `{id, type, ciphertext}`. Fails with `QUOTA_EXCEEDED` at the limit.       |
+| `PUT /vault/items/:id`    | Replace `{baseVersion, ciphertext}`. A stale version returns `VERSION_CONFLICT`. |
+| `DELETE /vault/items/:id` | Hard delete, idempotent, always 204.                                             |
+
+Pages are capped because Vercel Functions limit a response to 4.5 MB; 300 maximum-size items
+stay under that (a test in `@sm/shared` enforces the arithmetic). The item type cannot change
+after creation because it is bound into the encryption. Links between items (a credential's
+account and member, a card's bank) live inside the ciphertext, so the server cannot enforce
+them: the client must block deleting anything that is still referenced.
+Limits: 300 requests per minute per IP, 120 per minute per user.

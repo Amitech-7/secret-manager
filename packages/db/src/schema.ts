@@ -78,7 +78,6 @@ export const vaultItems = pgTable(
     version: integer('version').notNull().default(1),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
-    deletedAt: timestamptz('deleted_at'),
   },
   (t) => [
     check(
@@ -92,9 +91,7 @@ export const vaultItems = pgTable(
     ),
     check('vault_items_version_positive', sql`${t.version} >= 1`),
     index('vault_items_user_updated_idx').on(t.userId, t.updatedAt),
-    index('vault_items_user_type_idx')
-      .on(t.userId, t.type)
-      .where(sql`${t.deletedAt} is null`),
+    index('vault_items_user_type_idx').on(t.userId, t.type),
   ],
 )
 

@@ -291,6 +291,9 @@ importers:
       '@zxcvbn-ts/language-en':
         specifier: 4.1.1
         version: 4.1.1
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
     devDependencies:
       '@sm/api':
         specifier: workspace:*

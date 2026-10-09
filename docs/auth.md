@@ -52,6 +52,7 @@ server comparing the derived key. Wrong attempts count toward the limits below.
 | `/auth/register`                | 3 per hour per IP                                        |
 | `/auth/refresh`, `/auth/logout` | 30 per minute per IP                                     |
 | `/me`                           | 60 per minute per IP                                     |
+| `/vault/items`                  | 300 per minute per IP, and 120 per minute per user       |
 
 The per-username login limit counts every attempt, right or wrong, and for names that do not
 exist. A stranger can use it to lock someone out for up to 15 minutes. That is an accepted trade

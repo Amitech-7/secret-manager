@@ -8,6 +8,7 @@ import { rateLimit } from './rateLimit'
 import { auth } from './routes/auth'
 import { cron } from './routes/cron'
 import { me } from './routes/me'
+import { vault } from './routes/vault'
 
 export const MAX_BODY_BYTES = 2 * 1024 * 1024
 
@@ -59,6 +60,7 @@ export function createApp(deps: Deps) {
   app.route('/cron', cron)
   app.route('/auth', auth)
   app.route('/me', me)
+  app.route('/vault', vault)
 
   return app
 }
