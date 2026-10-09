@@ -61,6 +61,60 @@ export const payloadSchemas = {
   }),
 } as const satisfies Record<ItemType, z.ZodType>
 
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Name',
+  memberId: 'Member',
+  accountId: 'Account',
+  accountTypeId: 'Account type',
+  bankId: 'Bank',
+  username: 'Username',
+  password: 'Password',
+  hint: 'Hint',
+  remark: 'Remark',
+  expiryDate: 'Expiry date',
+  initialDate: 'Start date',
+  cardName: 'Card name',
+  nameOnCard: 'Name on card',
+  number: 'Card number',
+  cvv: 'CVV',
+}
+
+export type Validation<T extends ItemType> =
+  | { ok: true; payload: PayloadOf<T> }
+  | { ok: false; errors: Record<string, string> }
+
+/** Checks a form's values and returns one plain-language message per bad field. */
+export function validatePayload<T extends ItemType>(type: T, input: unknown): Validation<T> {
+  const parsed = payloadSchemas[type].safeParse(input)
+  if (parsed.success) return { ok: true, payload: parsed.data as PayloadOf<T> }
+  const errors: Record<string, string> = {}
+  for (const issue of parsed.error.issues) {
+    const field = String(issue.path[0] ?? 'form')
+    if (errors[field]) continue
+    const label = FIELD_LABELS[field] ?? field
+    const monthField = type === 'card' && (field === 'expiryDate' || field === 'initialDate')
+    const choose = field.endsWith('Id')
+    const tooBig = issue.code === 'too_big' && 'maximum' in issue ? issue.maximum : null
+    const empty =
+      issue.code === 'too_small' || (issue.code === 'invalid_type' && issue.input === undefined)
+    errors[field] =
+      type === 'card' && field === 'number'
+        ? 'Card number must be 8 to 19 digits.'
+        : type === 'card' && field === 'cvv'
+          ? 'CVV must be 3 to 5 digits.'
+          : monthField
+            ? 'Use month and year, like 2030-09.'
+            : choose
+              ? `Choose a ${label.toLowerCase()}.`
+              : empty
+                ? `${label} is required.`
+                : tooBig !== null
+                  ? `${label} is too long (at most ${String(tooBig)} characters).`
+                  : `${label} is not valid.`
+  }
+  return { ok: false, errors }
+}
+
 export type PayloadOf<T extends ItemType> = z.output<(typeof payloadSchemas)[T]>
 export type PayloadInput<T extends ItemType> = z.input<(typeof payloadSchemas)[T]>
 
