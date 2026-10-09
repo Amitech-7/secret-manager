@@ -80,8 +80,7 @@ const FIELD_LABELS: Record<string, string> = {
 }
 
 export type Validation<T extends ItemType> =
-  | { ok: true; payload: PayloadOf<T> }
-  | { ok: false; errors: Record<string, string> }
+  { ok: true; payload: PayloadOf<T> } | { ok: false; errors: Record<string, string> }
 
 /** Checks a form's values and returns one plain-language message per bad field. */
 export function validatePayload<T extends ItemType>(type: T, input: unknown): Validation<T> {
