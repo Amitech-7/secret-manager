@@ -1,11 +1,14 @@
-import type { Session } from '@sm/client'
-import { useEffect, useState } from 'react'
+import { logout, type Session } from '@sm/client'
+import { useEffect, useRef, useState } from 'react'
+import type { Screen } from './features/account/menuModel'
+import { UserMenu } from './features/account/UserMenu'
 import { ForgotPassword } from './features/auth/ForgotPassword'
 import { LoginForm } from './features/auth/LoginForm'
 import { RegisterFlow } from './features/auth/RegisterFlow'
 import { SignedIn } from './features/auth/SignedIn'
 import { Button, ButtonRow, Card, Notice } from './features/auth/ui'
 import { apiUrl } from './lib/api'
+import { api } from './lib/client'
 import { ThemeControls } from './theme/ThemeControls'
 
 type View = 'home' | 'login' | 'register' | 'forgot'
@@ -16,6 +19,10 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [health, setHealth] = useState<Health>('checking')
+  const [screen, setScreen] = useState<Screen>('vault')
+  // The refresh token rotates, so logging out must use the newest session, not a captured one.
+  const sessionRef = useRef<Session | null>(null)
+  sessionRef.current = session
   const contactEmail = import.meta.env.VITE_CONTACT_EMAIL
 
   useEffect(() => {
@@ -32,7 +39,15 @@ export default function App() {
   const signOut = (message?: string) => {
     setSession(null)
     setNotice(message ?? null)
+    setScreen('vault')
     setView('home')
+  }
+
+  // The vault key lives only in memory, so dropping the session locks the vault at once.
+  const logOut = async (message?: string) => {
+    const current = sessionRef.current
+    if (current) await logout(current, { api }).catch(() => undefined)
+    signOut(message)
   }
 
   return (
@@ -40,14 +55,23 @@ export default function App() {
       <header className="sticky top-0 z-10 border-b border-border bg-surface pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex w-full max-w-md items-center justify-between gap-2 px-4 py-2">
           <h1 className="text-lg font-semibold">Secret Manager</h1>
-          <details className="relative">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-lg border border-border-strong px-3 text-sm">
-              Theme
-            </summary>
-            <div className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface p-4 shadow-lg">
-              <ThemeControls />
-            </div>
-          </details>
+          {session ? (
+            <UserMenu
+              username={session.username}
+              screen={screen}
+              onNavigate={setScreen}
+              onLogOut={() => void logOut()}
+            />
+          ) : (
+            <details className="relative">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-lg border border-border-strong px-3 text-sm">
+                Theme
+              </summary>
+              <div className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface p-4 shadow-lg">
+                <ThemeControls />
+              </div>
+            </details>
+          )}
         </div>
       </header>
 
@@ -56,8 +80,11 @@ export default function App() {
           <SignedIn
             session={session}
             notice={notice}
+            screen={screen}
+            onScreenChange={setScreen}
             onSessionChange={setSession}
-            onLoggedOut={signOut}
+            onLogOut={logOut}
+            onAccountDeleted={() => signOut()}
           />
         ) : view === 'login' ? (
           <LoginForm

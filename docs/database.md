@@ -96,6 +96,8 @@ All routes need a signed-in session. The server stores and returns opaque cipher
 | `POST /vault/items`       | Create `{id, type, ciphertext}`. Fails with `QUOTA_EXCEEDED` at the limit.       |
 | `PUT /vault/items/:id`    | Replace `{baseVersion, ciphertext}`. A stale version returns `VERSION_CONFLICT`. |
 | `DELETE /vault/items/:id` | Hard delete, idempotent, always 204.                                             |
+| `POST /vault/items/batch` | Up to 50 creates in one transaction, all or nothing (import).                    |
+| `PUT /vault/items/batch`  | Up to 50 updates `{id, baseVersion, ciphertext}`; one stale item rolls back all. |
 
 Pages are capped because Vercel Functions limit a response to 4.5 MB; 300 maximum-size items
 stay under that (a test in `@sm/shared` enforces the arithmetic). The item type cannot change

@@ -174,6 +174,14 @@ export function createApiClient(options: ApiClientOptions = {}) {
       id: string,
       body: { baseVersion: number; ciphertext: string },
     ) => call<ItemWriteResponse>('PUT', `/vault/items/${id}`, body, accessToken),
+    createItems: (
+      accessToken: string,
+      items: Array<{ id: string; type: ItemType; ciphertext: string }>,
+    ) => call<{ count: number }>('POST', '/vault/items/batch', { items }, accessToken),
+    updateItems: (
+      accessToken: string,
+      items: Array<{ id: string; baseVersion: number; ciphertext: string }>,
+    ) => call<{ count: number }>('PUT', '/vault/items/batch', { items }, accessToken),
     deleteItem: (accessToken: string, id: string) =>
       call<void>('DELETE', `/vault/items/${id}`, undefined, accessToken),
   }

@@ -7,6 +7,7 @@ import {
   deriveKeys,
   randomSalt,
   validateKdfParams,
+  type DerivedKeys,
   type KdfParams,
 } from './kdf'
 
@@ -50,8 +51,15 @@ function headerAad(kdf: KdfParams, saltB64: string): Uint8Array {
   )
 }
 
-async function exportKey(passphrase: string, salt: Uint8Array, kdf: KdfParams) {
-  const { authKey, wrapKey } = await deriveKeys(passphrase, salt, kdf)
+/** Lets the web app run Argon2id in a Web Worker instead of freezing the page. */
+export type KeyDeriver = (
+  passphrase: string,
+  salt: Uint8Array,
+  params: KdfParams,
+) => Promise<DerivedKeys>
+
+async function exportKey(passphrase: string, salt: Uint8Array, kdf: KdfParams, derive: KeyDeriver) {
+  const { authKey, wrapKey } = await derive(passphrase, salt, kdf)
   authKey.fill(0)
   try {
     return await importAesKey(wrapKey)
@@ -64,13 +72,14 @@ export async function createExport(
   passphrase: string,
   items: ExportItem[],
   kdf: KdfParams = DEFAULT_KDF_PARAMS,
+  derive: KeyDeriver = deriveKeys,
 ): Promise<string> {
   if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
     throw new CryptoError('WEAK_PASSPHRASE', 'Export passphrase is too short')
   }
   const salt = randomSalt()
   const saltB64 = toBase64Url(salt)
-  const key = await exportKey(passphrase, salt, kdf)
+  const key = await exportKey(passphrase, salt, kdf, derive)
   const plaintext = utf8(JSON.stringify({ exportedAt: new Date().toISOString(), items }))
   const blob = await encrypt(key, plaintext, headerAad(kdf, saltB64))
   const envelope: ExportEnvelope = {
@@ -107,13 +116,17 @@ function parseEnvelope(text: string): ExportEnvelope {
   return e as ExportEnvelope
 }
 
-export async function readExport(passphrase: string, text: string): Promise<ExportItem[]> {
+export async function readExport(
+  passphrase: string,
+  text: string,
+  derive: KeyDeriver = deriveKeys,
+): Promise<ExportItem[]> {
   const envelope = parseEnvelope(text)
   // Validate before doing any expensive work: a crafted file must not exhaust memory or CPU.
   validateKdfParams(envelope.kdf)
   const salt = fromBase64Url(envelope.salt)
   if (salt.length !== KDF_SALT_BYTES) throw new CryptoError('INVALID_FORMAT', 'Bad salt')
-  const key = await exportKey(passphrase, salt, envelope.kdf)
+  const key = await exportKey(passphrase, salt, envelope.kdf, derive)
 
   let plaintext: Uint8Array
   try {

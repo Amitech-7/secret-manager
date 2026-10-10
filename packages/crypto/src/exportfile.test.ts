@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { fromBase64Url, toBase64Url } from './bytes'
-import { EXPORT_FORMAT, createExport, readExport, type ExportItem } from './exportfile'
-import { KDF_BOUNDS, type KdfParams } from './kdf'
+import {
+  EXPORT_FORMAT,
+  createExport,
+  readExport,
+  type ExportItem,
+  type KeyDeriver,
+} from './exportfile'
+import { KDF_BOUNDS, deriveKeys, type KdfParams } from './kdf'
 
 const FAST: KdfParams = {
   alg: 'argon2id',
@@ -27,6 +33,17 @@ describe('export file', () => {
     expect(file).not.toContain('alice')
     expect(file).not.toContain('4111111111111111')
     expect(JSON.parse(file)).toMatchObject({ format: EXPORT_FORMAT, version: 1, kdf: FAST })
+  })
+
+  it('uses a custom key deriver when given one (the web app passes a worker)', async () => {
+    let calls = 0
+    const derive: KeyDeriver = (pw, salt, params) => {
+      calls++
+      return deriveKeys(pw, salt, params)
+    }
+    const file = await createExport(PASS, ITEMS, FAST, derive)
+    expect(await readExport(PASS, file, derive)).toEqual(ITEMS)
+    expect(calls).toBe(2)
   })
 
   it('differs every time (fresh salt and IV)', async () => {
