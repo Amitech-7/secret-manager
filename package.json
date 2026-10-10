@@ -14,6 +14,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r --workspace-concurrency=1 test",
     "e2e": "pnpm --filter @sm/e2e e2e",
+    "audit:prod": "pnpm audit --prod",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"

@@ -25,8 +25,8 @@ production after release.
 
 - [ ] Add, edit and delete a credential and a card. Deleting needs the name typed.
 - [ ] Passwords, card numbers and CVVs are hidden; Show hides again after about 15 seconds.
-- [ ] Copy works, and the clipboard is empty about 30 seconds later ★.
-      Safari and Firefox may refuse to read the clipboard; they should still clear it.
+- [ ] Copy works, and the clipboard is empty about 30 seconds later ★. No browser permission
+      prompt ever appears. (Anything else you copy in those 30 seconds is cleared too.)
 - [ ] Filters: Member, then Account type and Account (credentials) or Bank (cards).
 - [ ] Manage lists: a member, bank, account or account type that is still used cannot be
       deleted; the last member cannot be deleted; duplicate names are refused.
@@ -45,6 +45,20 @@ production after release.
       import ★.
 - [ ] With a vault near 1,000 items, an import that would pass the limit is refused with no
       partial result.
+
+## Security headers ★
+
+Open DevTools on the **Console** first. See `security-headers.md` for how to read the result.
+
+- [ ] Registering with the **real** Turnstile widget logs no `[Report Only] Refused to ...`
+      lines. If it does, note the directive and origin it names.
+- [ ] The same is true for login, the vault, Manage lists, Backup (export and import), Settings,
+      and forgot-password.
+- [ ] Response headers on the home page (DevTools, Network, the document) include
+      `Content-Security-Policy`, `Content-Security-Policy-Report-Only`, `Strict-Transport-Security`,
+      `Permissions-Policy`, `Cross-Origin-Opener-Policy`.
+- [ ] An API response (for example `/api/v1/health`) shows `Cache-Control: no-store`.
+- [ ] Try framing the site from another page: it must refuse to load.
 
 ## Inactivity and sessions
 

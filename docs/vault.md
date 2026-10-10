@@ -11,7 +11,9 @@ Theme control. Documentation and Contact Us are in the footer.
 - Pick a **Member** (Self is the default), then **Credentials** or **Cards**.
 - Credentials filter by **Account type** and **Account**; cards filter by **Bank**.
 - Passwords, card numbers and CVVs are hidden. **Show** reveals a value for 15 seconds. **Copy**
-  puts it on the clipboard and tries to clear it after 30 seconds. Card numbers display as
+  puts it on the clipboard and clears the clipboard 30 seconds later (anything else you copied in
+  that window is cleared too, because reading the clipboard would trigger a browser permission
+  prompt). Card numbers display as
   `xxxx xxxx xxxx 0123`.
 - **Manage lists** adds, renames and deletes members, banks, account types and accounts. Anything
   still used by a credential or card cannot be deleted, and at least one member must remain.

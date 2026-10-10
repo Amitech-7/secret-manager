@@ -4,6 +4,9 @@ const API_PORT = 8787
 const WEB_PORT = 5173
 // Only for locked-down containers where Playwright cannot download its own browser.
 const chromium = process.env.E2E_CHROMIUM_PATH
+// Default: the production build served with the real security headers (what gets deployed).
+// E2E_DEV=1 uses the Vite dev server instead: quicker to start, but it has no security headers.
+const dev = Boolean(process.env.E2E_DEV)
 
 export default defineConfig({
   testDir: './tests',
@@ -33,12 +36,14 @@ export default defineConfig({
       timeout: 60_000,
     },
     {
-      // Vite proxies /api to the server above. Any non-empty key enables the captcha widget;
-      // the tests replace Cloudflare's script with a stub.
-      command: `pnpm --dir ../web exec vite --port ${WEB_PORT} --strictPort`,
+      // Any non-empty captcha key enables the widget; the tests replace Cloudflare's script with
+      // a stub. The key is compiled into the build, so it must be set for the build step too.
+      command: dev
+        ? `pnpm --dir ../web exec vite --port ${WEB_PORT} --strictPort`
+        : 'pnpm --dir ../web build && pnpm exec tsx preview.ts',
       url: `http://localhost:${WEB_PORT}`,
       reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
+      timeout: 120_000,
       env: { VITE_TURNSTILE_SITE_KEY: 'e2e-test-key' },
     },
   ],

@@ -14,6 +14,8 @@ const BACKUP_PASSPHRASE = 'correct horse battery staple'
 let context: BrowserContext
 let page: Page
 let generated = ''
+/** Every Content Security Policy violation seen anywhere: pages, the key-derivation worker, frames. */
+const violations: string[] = []
 
 test.describe.configure({ mode: 'serial' })
 
@@ -22,6 +24,22 @@ test.beforeAll(async ({ browser }) => {
     viewport: { width: 360, height: 740 },
     acceptDownloads: true,
     permissions: ['clipboard-read', 'clipboard-write'],
+  })
+  // Violations in the page arrive as events; those in workers only show up as console errors.
+  await context.exposeFunction('__reportCsp', (detail: string) => violations.push(detail))
+  await context.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (e) => {
+      void (window as unknown as { __reportCsp: (d: string) => void }).__reportCsp(
+        `${e.violatedDirective} blocked ${e.blockedURI || 'inline'} (${e.sourceFile ?? 'page'})`,
+      )
+    })
+  })
+  context.on('console', (msg) => {
+    if (
+      /Content Security Policy|Refused to (?:load|execute|connect|create|apply)/i.test(msg.text())
+    ) {
+      violations.push(msg.text())
+    }
   })
   // Replace Cloudflare's captcha script with a stub that passes at once.
   await context.route('https://challenges.cloudflare.com/**', (route) =>
@@ -36,7 +54,9 @@ test.beforeAll(async ({ browser }) => {
   page = await context.newPage()
 })
 
-test.afterEach(async ({ page }, info) => {
+// Playwright insists on a destructuring pattern here, even an empty one, so lint is told to allow it.
+// eslint-disable-next-line no-empty-pattern
+test.afterEach(async ({}, info) => {
   if (info.status !== info.expectedStatus) {
     await page.screenshot({ path: info.outputPath('failure.png'), fullPage: true })
   }
@@ -309,4 +329,10 @@ test('logs out by itself after a period of inactivity', async () => {
   await expect(p.getByText('You were logged out after a period of inactivity.')).toBeVisible()
   await expect(p.getByRole('button', { name: 'Log in' })).toBeVisible()
   await p.close()
+})
+
+test('no Content Security Policy violations happened anywhere in the journey', () => {
+  // Meaningful only against the production build, which carries the real headers.
+  test.skip(Boolean(process.env.E2E_DEV), 'The Vite dev server does not send the security headers')
+  expect(violations).toEqual([])
 })

@@ -4,6 +4,11 @@ import { z } from 'zod'
 import type { ItemRecord } from './api'
 import { withFreshSession, type AuthOptions, type Session } from './auth'
 
+// The browser enforces a Content Security Policy without 'unsafe-eval'. By default zod probes
+// `Function('')` at startup to decide whether it may compile faster parsers, which the policy
+// blocks and reports as a violation on every page load. Our payloads are tiny, so skip the probe.
+z.config({ jitless: true })
+
 // --- payload shapes (what is inside each encrypted item) --------------------------------------
 // Limits follow the original spec. Optional text is stored as '' so forms never deal with
 // undefined. Nothing here is ever sent to the server in the clear.

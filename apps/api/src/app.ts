@@ -21,6 +21,11 @@ export function buildBase(deps: Deps) {
     await next()
   })
   app.use('*', secureHeaders())
+  // Nothing the API returns (ciphertext, sessions, errors) may be stored by a browser or proxy.
+  app.use('*', async (c, next) => {
+    await next()
+    c.header('Cache-Control', 'no-store')
+  })
   app.use(
     '*',
     cors({
