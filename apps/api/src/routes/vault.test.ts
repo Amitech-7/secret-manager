@@ -306,3 +306,133 @@ describe('list', () => {
     expect((await call(a, 'GET', '/items?after=nope')).status).toBe(400)
   })
 })
+
+describe('batch create', () => {
+  const entries = (n: number) =>
+    Array.from({ length: n }, () => ({
+      id: crypto.randomUUID(),
+      type: 'credential',
+      ciphertext: blob(),
+    }))
+  const countOf = async (userId: string) =>
+    (await h.db.select().from(users).where(eq(users.id, userId)))[0]!.itemCount
+
+  it('stores a whole chunk and bumps the counter once', async () => {
+    const a = await actor()
+    const res = await call(a, 'POST', '/items/batch', { items: entries(5) })
+    expect(res.status).toBe(201)
+    expect(await countOf(a.userId)).toBe(5)
+    expect(
+      (await h.db.select().from(vaultItems).where(eq(vaultItems.userId, a.userId))).length,
+    ).toBe(5)
+  })
+
+  it('stores nothing when the chunk would pass the quota', async () => {
+    const a = await actor({ itemCount: LIMITS.maxItemsPerUser - 3 })
+    const res = await call(a, 'POST', '/items/batch', { items: entries(4) })
+    expect(res.status).toBe(403)
+    expect(await codeOf(res)).toBe('QUOTA_EXCEEDED')
+    expect(await countOf(a.userId)).toBe(LIMITS.maxItemsPerUser - 3)
+    expect(
+      (await h.db.select().from(vaultItems).where(eq(vaultItems.userId, a.userId))).length,
+    ).toBe(0)
+    expect((await call(a, 'POST', '/items/batch', { items: entries(3) })).status).toBe(201)
+    expect(await countOf(a.userId)).toBe(LIMITS.maxItemsPerUser)
+  })
+
+  it('rolls the whole chunk back on a duplicate id', async () => {
+    const a = await actor()
+    const existing = crypto.randomUUID()
+    await create(a, { id: existing })
+    const items = [...entries(3), { id: existing, type: 'credential', ciphertext: blob() }]
+    expect((await call(a, 'POST', '/items/batch', { items })).status).toBe(400)
+    expect(await countOf(a.userId)).toBe(1)
+    expect(
+      (await h.db.select().from(vaultItems).where(eq(vaultItems.userId, a.userId))).length,
+    ).toBe(1)
+
+    const twice = entries(1)
+    expect((await call(a, 'POST', '/items/batch', { items: [...twice, ...twice] })).status).toBe(
+      400,
+    )
+    expect(await countOf(a.userId)).toBe(1)
+  })
+
+  it('validates size, shape and the 50-item cap', async () => {
+    const a = await actor()
+    expect((await call(a, 'POST', '/items/batch', { items: [] })).status).toBe(400)
+    expect((await call(a, 'POST', '/items/batch', { items: entries(51) })).status).toBe(400)
+    expect(
+      (await call(a, 'POST', '/items/batch', { items: [{ ...entries(1)[0], type: 'note' }] }))
+        .status,
+    ).toBe(400)
+    expect((await call(a, 'POST', '/items/batch', { items: entries(50) })).status).toBe(201)
+  })
+})
+
+describe('batch update', () => {
+  const seedItems = async (a: Actor, n: number) => {
+    const ids = Array.from({ length: n }, () => crypto.randomUUID())
+    for (const id of ids) await create(a, { id })
+    return ids
+  }
+  const stored = async (id: string) =>
+    Buffer.from(
+      (await h.db.select().from(vaultItems).where(eq(vaultItems.id, id)))[0]!.ciphertext,
+    ).toString('base64url')
+
+  it('updates every item and bumps each version', async () => {
+    const a = await actor()
+    const ids = await seedItems(a, 3)
+    const res = await call(a, 'PUT', '/items/batch', {
+      items: ids.map((id) => ({ id, baseVersion: 1, ciphertext: blob(70, 6) })),
+    })
+    expect(res.status).toBe(200)
+    for (const id of ids) {
+      expect(await stored(id)).toBe(blob(70, 6))
+      expect((await h.db.select().from(vaultItems).where(eq(vaultItems.id, id)))[0]!.version).toBe(
+        2,
+      )
+    }
+  })
+
+  it('changes nothing if any one item is stale', async () => {
+    const a = await actor()
+    const [x, y] = await seedItems(a, 2)
+    await call(a, 'PUT', `/items/${y}`, { baseVersion: 1, ciphertext: blob(70, 2) })
+    const res = await call(a, 'PUT', '/items/batch', {
+      items: [
+        { id: x!, baseVersion: 1, ciphertext: blob(70, 9) },
+        { id: y!, baseVersion: 1, ciphertext: blob(70, 9) },
+      ],
+    })
+    expect(res.status).toBe(409)
+    expect(await codeOf(res)).toBe('VERSION_CONFLICT')
+    expect(await stored(x!)).toBe(blob())
+    expect(await stored(y!)).toBe(blob(70, 2))
+  })
+
+  it("cannot touch another user's items and reports NOT_FOUND", async () => {
+    const a = await actor()
+    const b = await actor()
+    const [mine] = await seedItems(a, 1)
+    const [theirs] = await seedItems(b, 1)
+    const res = await call(a, 'PUT', '/items/batch', {
+      items: [
+        { id: mine!, baseVersion: 1, ciphertext: blob(70, 5) },
+        { id: theirs!, baseVersion: 1, ciphertext: blob(70, 5) },
+      ],
+    })
+    expect(res.status).toBe(404)
+    expect(await stored(mine!)).toBe(blob())
+    expect(await stored(theirs!)).toBe(blob())
+  })
+
+  it('rejects duplicate ids within a chunk and is not mistaken for an item id', async () => {
+    const a = await actor()
+    const [id] = await seedItems(a, 1)
+    const dup = { id: id!, baseVersion: 1, ciphertext: blob(70, 4) }
+    expect((await call(a, 'PUT', '/items/batch', { items: [dup, dup] })).status).toBe(400)
+    expect((await call(a, 'PUT', '/items/batch', { items: [dup] })).status).toBe(200)
+  })
+})

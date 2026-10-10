@@ -56,6 +56,39 @@ const updateSchema = z
   })
   .strict()
 
+/** Import writes in chunks; 50 maximum-size items is about 550 KB, far below the body limit. */
+export const MAX_BATCH_ITEMS = 50
+
+const batchCreateSchema = z
+  .object({
+    items: z
+      .array(
+        z.object({ id: z.uuid(), type: z.enum(ITEM_TYPES), ciphertext: ciphertextSchema }).strict(),
+      )
+      .min(1)
+      .max(MAX_BATCH_ITEMS),
+  })
+  .strict()
+
+const batchUpdateSchema = z
+  .object({
+    items: z
+      .array(
+        z
+          .object({
+            id: z.uuid(),
+            baseVersion: z.number().int().min(1),
+            ciphertext: ciphertextSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(MAX_BATCH_ITEMS),
+  })
+  .strict()
+
+const hasDuplicates = (ids: string[]) => new Set(ids).size !== ids.length
+
 function isUniqueViolation(err: unknown): boolean {
   for (let e: unknown = err, i = 0; e && i < 5; i++, e = (e as { cause?: unknown }).cause) {
     if ((e as { code?: unknown }).code === '23505') return true
@@ -146,6 +179,92 @@ vault.post('/items', async (c) => {
     throw err
   }
   return c.json({ id: body.id, version: 1, updatedAt: now.toISOString() }, 201)
+})
+
+// --- batch create / update (used by import) ---------------------------------------------------
+// Registered before the `/items/:id` routes so that "batch" is never read as an id.
+
+vault.post('/items/batch', async (c) => {
+  const deps = c.get('deps')
+  const userId = c.get('userId')
+  const body = await parseJson(c, batchCreateSchema)
+  if (hasDuplicates(body.items.map((i) => i.id))) {
+    throw new AppError('VALIDATION', 'Duplicate item id')
+  }
+  const now = deps.now()
+  const n = body.items.length
+
+  try {
+    await deps.getDb().transaction(async (tx) => {
+      // All or nothing: either the whole chunk fits under the quota and is stored, or none is.
+      const bumped = await tx
+        .update(users)
+        .set({ itemCount: sql`${users.itemCount} + ${n}` })
+        .where(
+          and(eq(users.id, userId), sql`${users.itemCount} + ${n} <= ${LIMITS.maxItemsPerUser}`),
+        )
+        .returning({ n: users.itemCount })
+      if (bumped.length === 0) {
+        throw new AppError('QUOTA_EXCEEDED', `Item limit reached (${LIMITS.maxItemsPerUser})`)
+      }
+      await tx.insert(vaultItems).values(
+        body.items.map((i) => ({
+          id: i.id,
+          userId,
+          type: i.type,
+          ciphertext: bytes(i.ciphertext),
+          createdAt: now,
+          updatedAt: now,
+        })),
+      )
+    })
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new AppError('VALIDATION', 'Duplicate item id')
+    throw err
+  }
+  return c.json({ count: n }, 201)
+})
+
+vault.put('/items/batch', async (c) => {
+  const deps = c.get('deps')
+  const userId = c.get('userId')
+  const body = await parseJson(c, batchUpdateSchema)
+  if (hasDuplicates(body.items.map((i) => i.id))) {
+    throw new AppError('VALIDATION', 'Duplicate item id')
+  }
+  const db = deps.getDb()
+  const now = deps.now()
+
+  await db.transaction(async (tx) => {
+    for (const item of body.items) {
+      const [row] = await tx
+        .update(vaultItems)
+        .set({
+          ciphertext: bytes(item.ciphertext),
+          version: sql`${vaultItems.version} + 1`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(vaultItems.id, item.id),
+            eq(vaultItems.userId, userId),
+            eq(vaultItems.version, item.baseVersion),
+          ),
+        )
+        .returning({ id: vaultItems.id })
+      if (!row) {
+        const [existing] = await tx
+          .select({ id: vaultItems.id })
+          .from(vaultItems)
+          .where(and(eq(vaultItems.id, item.id), eq(vaultItems.userId, userId)))
+          .limit(1)
+        // Throwing rolls back every update made so far in this chunk.
+        if (!existing) throw new AppError('NOT_FOUND', 'Item not found')
+        throw new AppError('VERSION_CONFLICT', 'An item changed elsewhere. Reload and try again.')
+      }
+    }
+  })
+  return c.json({ count: body.items.length })
 })
 
 // --- update (optimistic concurrency) ----------------------------------------------------------

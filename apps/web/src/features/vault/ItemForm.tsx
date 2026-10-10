@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { describeError } from '../auth/errors'
 import { Button, ButtonRow, ErrorText, Field, Notice } from '../auth/ui'
 import { Select } from './controls'
+import { PasswordGenerator } from './PasswordGenerator'
 import type { Split } from './vaultView'
 
 type Kind = 'credential' | 'card'
@@ -139,6 +140,19 @@ export function ItemForm(props: {
             />
             Show password while typing
           </label>
+          <details className="rounded-lg border border-border px-3">
+            <summary className="min-h-11 cursor-pointer py-2.5 text-sm font-medium">
+              Generate a strong password
+            </summary>
+            <div className="pb-3">
+              <PasswordGenerator
+                onUse={(generated) => {
+                  set('password')(generated)
+                  setShowPassword(true) // so the person can see what was filled in
+                }}
+              />
+            </div>
+          </details>
           <Field
             label="Hint (optional)"
             value={get('hint')}
