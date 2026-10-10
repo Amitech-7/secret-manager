@@ -97,7 +97,7 @@ describe('index.html', () => {
   const html = read('../index.html')
 
   it('has no inline scripts, handlers or styles that the policy would block', () => {
-    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)]
     expect(scripts.length).toBeGreaterThan(0)
     for (const [, attrs, body] of scripts) {
       expect(attrs).toMatch(/\bsrc="/)
