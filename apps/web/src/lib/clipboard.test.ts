@@ -1,19 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CLIPBOARD_CLEAR_MS, copySecret, type ClipboardLike } from './clipboard'
 
-function fake(initial = '', canRead = true) {
-  const state = { text: initial }
-  const clip: ClipboardLike = {
+function fake() {
+  const state = { text: '', reads: 0 }
+  const clip: ClipboardLike & { readText: () => Promise<string> } = {
     writeText: async (t) => {
       state.text = t
     },
-    ...(canRead
-      ? { readText: async () => state.text }
-      : {
-          readText: async () => {
-            throw new Error('denied')
-          },
-        }),
+    // Present only to prove the app never calls it.
+    readText: async () => {
+      state.reads++
+      return state.text
+    },
   }
   return { state, clip }
 }
@@ -32,19 +30,11 @@ describe('copySecret', () => {
     expect(state.text).toBe('')
   })
 
-  it('leaves the clipboard alone if the user copied something else meanwhile', async () => {
+  it('never reads the clipboard, so the browser never asks for permission to', async () => {
     const { state, clip } = fake()
     await copySecret('hunter2', clip)
-    state.text = 'something else'
     await vi.advanceTimersByTimeAsync(CLIPBOARD_CLEAR_MS + 1)
-    expect(state.text).toBe('something else')
-  })
-
-  it('clears anyway when the clipboard cannot be read', async () => {
-    const { state, clip } = fake('', false)
-    await copySecret('hunter2', clip)
-    await vi.advanceTimersByTimeAsync(CLIPBOARD_CLEAR_MS + 1)
-    expect(state.text).toBe('')
+    expect(state.reads).toBe(0)
   })
 
   it('a new copy restarts the countdown', async () => {
@@ -56,6 +46,18 @@ describe('copySecret', () => {
     expect(state.text).toBe('two')
     await vi.advanceTimersByTimeAsync(11_000)
     expect(state.text).toBe('')
+  })
+
+  it('stays quiet if the final clear is refused', async () => {
+    let calls = 0
+    const clip: ClipboardLike = {
+      writeText: async () => {
+        if (++calls > 1) throw new Error('not focused')
+      },
+    }
+    await copySecret('x', clip)
+    await expect(vi.advanceTimersByTimeAsync(CLIPBOARD_CLEAR_MS + 1)).resolves.not.toThrow()
+    expect(calls).toBe(2)
   })
 
   it('reports failure when copying is refused or unavailable', async () => {
